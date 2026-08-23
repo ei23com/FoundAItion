@@ -192,6 +192,83 @@
         /* ── Header Action Icons (dezente + und LLM-Icons) ─── */
         .btn-icon.header-btn-add:hover { border-color: #34d399; color: #34d399; }
         .btn-icon.header-btn-llm:hover  { border-color: #60a5fa; color: #60a5fa; }
+        .btn-icon.header-btn-map:hover  { border-color: #a78bfa; color: #a78bfa; }
+        .btn-icon.header-btn-list:hover { border-color: #34d399; color: #34d399; }
+        .btn-icon.view-active { border-color: #60a5fa !important; color: #60a5fa !important; background: rgba(96,165,250,0.12); }
+
+        /* Semantik-Toggle in der Suchzeile */
+        .btn-icon.header-btn-semantic { font-size: 0.95rem; }
+        .btn-icon.header-btn-semantic:hover  { border-color: #a78bfa; color: #a78bfa; }
+        .btn-icon.header-btn-semantic.active {
+            border-color: #a78bfa; color: #a78bfa;
+            background: rgba(167,139,250,0.16);
+            box-shadow: inset 0 -2px 0 #a78bfa;
+        }
+
+        /* Datumsfilter in der Suchzeile */
+        .hdr-date-label {
+            display:flex; align-items:center; gap:0.35rem;
+            font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;
+        }
+        .hdr-date-label input[type="date"] {
+            background:var(--bg-secondary, transparent); color:var(--text);
+            border:1px solid var(--border); border-radius:6px;
+            padding:0.28rem 0.4rem; font-size:0.75rem;
+        }
+        html[data-theme="dark"] .hdr-date-label input[type="date"] { color-scheme:dark; }
+
+        /* Datum als Dropdown-Button */
+        .date-dd-wrap { position:relative; }
+        .date-dd-btn { display:flex; align-items:center; gap:0.3rem; }
+        .date-dd-btn.active { border-color:#a78bfa !important; color:#a78bfa !important; background:rgba(167,139,250,0.14); }
+        .dd-label {
+            font-size:0.72rem; color:var(--text-secondary);
+            max-width:10.5rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
+        .date-dd-btn.active .dd-label { color:#a78bfa; }
+        .date-dd-panel {
+            display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:80;
+            background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px;
+            padding:0.7rem; box-shadow:0 12px 30px rgba(0,0,0,0.4);
+            flex-direction:column; gap:0.55rem; min-width:235px;
+        }
+        .date-dd-panel.open { display:flex; }
+        .date-dd-panel label {
+            display:flex; align-items:center; justify-content:space-between; gap:0.6rem;
+            font-size:0.78rem; color:var(--text-secondary);
+        }
+        .date-dd-panel input[type="date"] {
+            background:var(--bg-primary, transparent); color:var(--text);
+            border:1px solid var(--border); border-radius:6px;
+            padding:0.3rem 0.4rem; font-size:0.78rem;
+        }
+        html[data-theme="dark"] .date-dd-panel input[type="date"] { color-scheme:dark; }
+        .date-dd-reset {
+            align-self:flex-start; padding:0.25rem 0.6rem; border-radius:8px;
+            border:1px solid var(--border); background:transparent;
+            color:var(--text-secondary); font-size:0.76rem; cursor:pointer;
+        }
+        .date-dd-reset:hover { border-color:#a78bfa; color:#a78bfa; }
+
+        /* Regionen-Liste unter der Legende */
+        .map-regions { display:flex; flex-wrap:wrap; gap:0.35rem 0.5rem; align-items:center; }
+        .region-chip button {
+            background:none; border:none; cursor:pointer; padding:0 0.05rem;
+            font-size:0.72rem; line-height:1; color:var(--text-secondary);
+        }
+        .region-chip button:hover { color:#a78bfa; }
+        .map-canvas-wrap.drawing { cursor:crosshair; }
+
+        /* Mobile: kompakte Suchzeile */
+        @media (max-width: 640px) {
+            .search-row { gap: 0.3rem; }
+            .btn-icon { padding: 0.32rem 0.45rem; font-size: 0.85rem; }
+            .search-input-wrap input { font-size: 0.85rem; }
+            .hdr-date-label { display:none; } /* nur im Dropdown vorhanden */
+        }
+        @media (max-width: 480px) {
+            .dd-label { display:none; } /* nur 📅-Icon */
+        }
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -260,6 +337,15 @@
 
         .chip:hover { border-color: var(--primary); color: var(--primary); }
         .chip.active { background: var(--primary); color: #111; border-color: var(--primary); font-weight: 600; }
+        .chip-semantic.active { background: #a78bfa; border-color: #a78bfa; color: #111; }
+
+        /* Semantischer Score in der Liste (RAG-Treffer) */
+        .score-badge {
+            display:inline-block; padding:0.05rem 0.45rem; border-radius:8px;
+            font-size:0.68rem; font-weight:600;
+            background:rgba(167,139,250,0.16); color:#a78bfa;
+            white-space:nowrap;
+        }
 
         /* ── Filter chips row ─────────────────────── */
         .filter-chips {
@@ -1460,6 +1546,88 @@
             .pagination { gap: 0.3rem; }
             .page-btn { padding: 0.35rem 0.6rem; font-size: 0.78rem; min-width: 1.8rem; }
         }
+
+        /* ── Vectormap ─────────────────────────────────────── */
+        .map-shell { display:flex; flex-direction:column; gap:0.6rem; }
+        .map-toolbar {
+            display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem;
+            background:var(--bg-secondary); border:1px solid var(--border);
+            border-radius:10px; padding:0.5rem 0.75rem;
+        }
+        .map-toolbar input[type="date"] {
+            background:var(--bg-primary); color:var(--text-primary);
+            border:1px solid var(--border); border-radius:6px;
+            padding:0.3rem 0.45rem; font-size:0.78rem;
+        }
+        html[data-theme="dark"] .map-toolbar input[type="date"] { color-scheme:dark; }
+        .map-toolbar label.map-date-label { font-size:0.75rem; color:var(--text-secondary); }
+        .map-search-wrap {
+            flex:1 1 220px; display:flex; align-items:center; gap:0.4rem;
+            background:var(--bg-primary); border:1px solid var(--border);
+            border-radius:8px; padding:0.25rem 0.6rem;
+        }
+        .map-search-wrap input {
+            flex:1; background:transparent; border:none; outline:none;
+            color:var(--text-primary); font-size:0.82rem; min-width:120px;
+        }
+        .map-semantic-toggle {
+            display:flex; align-items:center; gap:0.3rem; cursor:pointer;
+            font-size:0.75rem; color:var(--text-secondary); user-select:none; white-space:nowrap;
+        }
+        .map-semantic-toggle input { accent-color:#60a5fa; cursor:pointer; }
+        .map-stats-line { font-size:0.75rem; color:var(--text-secondary); display:flex; flex-wrap:wrap; gap:0.3rem 0.9rem; align-items:center; }
+        .map-canvas-wrap {
+            position:relative; height:calc(100vh - 240px); min-height:420px;
+            background:var(--bg-secondary); border:1px solid var(--border);
+            border-radius:12px; overflow:hidden; cursor:grab;
+        }
+        .map-canvas-wrap.panning { cursor:grabbing; }
+        #mapCanvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+        .map-tooltip {
+            position:absolute; pointer-events:none; z-index:30;
+            max-width:320px; color:var(--text-primary);
+            background:rgba(13,18,28,0.72);
+            border:1px solid var(--border); border-radius:8px;
+            padding:0.45rem 0.65rem; font-size:0.82rem; line-height:1.4;
+            box-shadow:0 6px 22px rgba(0,0,0,0.5);
+            backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+            opacity:0; transition:opacity 0.08s;
+        }
+        html[data-theme="light"] .map-tooltip { background:rgba(255,255,255,0.80); }
+        .map-tooltip.show { opacity:1; }
+        .map-tooltip .tt-title { font-weight:600; margin-bottom:0.15rem; word-break:break-word; }
+        .map-tooltip .tt-meta { color:var(--text-secondary); font-size:0.7rem; }
+        .map-tooltip .tt-hint { color:var(--text-muted); font-size:0.66rem; margin-top:0.2rem; }
+        .map-legend { display:flex; flex-wrap:wrap; gap:0.35rem 0.5rem; align-items:center; }
+        .map-legend-chip {
+            display:inline-flex; align-items:center; gap:0.32rem;
+            font-size:0.72rem; padding:0.18rem 0.55rem; border-radius:999px;
+            border:1px solid var(--border); background:var(--bg-secondary);
+            color:var(--text-secondary); cursor:pointer; user-select:none;
+            transition:opacity 0.15s;
+        }
+        .map-legend-chip.hidden-cat { opacity:0.35; text-decoration:line-through; }
+        .map-legend-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+        .map-status-card {
+            position:absolute; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+            background:rgba(0,0,0,0.25); backdrop-filter:blur(2px);
+        }
+        .map-status-inner {
+            background:var(--bg-secondary); border:1px solid var(--border); border-radius:14px;
+            padding:1.4rem 1.8rem; text-align:center; max-width:430px; box-shadow:0 10px 30px rgba(0,0,0,0.4);
+        }
+        .map-status-inner h3 { margin:0 0 0.5rem; font-size:1rem; }
+        .map-status-inner p { margin:0.3rem 0; font-size:0.82rem; color:var(--text-secondary); }
+        .map-progress-track {
+            width:100%; height:8px; background:var(--bg-primary); border-radius:99px;
+            overflow:hidden; margin:0.7rem 0 0.4rem; border:1px solid var(--border);
+        }
+        .map-progress-fill { height:100%; background:#60a5fa; border-radius:99px; transition:width 0.4s; width:0%; }
+        .map-btn-primary {
+            margin-top:0.7rem; padding:0.45rem 1.1rem; border:none; border-radius:8px;
+            background:#3b82f6; color:#fff; font-size:0.82rem; font-weight:600; cursor:pointer;
+        }
+        .map-btn-primary:hover { background:#2563eb; }
     </style>
 </head>
 <body>
@@ -1474,6 +1642,7 @@
                 <button id="menuAddLink">➕ <span data-i18n="add_title">Link hinzufügen</span></button>
                 <button id="menuProcess">🧠 <span data-i18n="btn_process">Zusammenfassungen erstellen</span></button>
                 <button id="menuCategorize">🏷️ <span data-i18n="menu_categorize">Kategorisierung</span></button>
+                <button id="menuMap">🗺️ <span data-i18n="menu_map">Themenkarte</span></button>
                 <button id="menuConfig">⚙️ <span data-i18n="menu_config">Konfiguration</span></button>
                 <hr class="hamburger-divider">
                 <span class="hamburger-header"><span data-i18n="menu_language">Sprache / Language</span></span>
@@ -1485,11 +1654,20 @@
             </div>
         </div>
 
-        <!-- Suchleiste + Icons, volle Breite bis Container-Rand -->
+        <!-- Suchleiste (gemeinsam für Liste & Karte) -->
         <div class="search-row" id="searchRow">
             <div class="search-input-wrap">
                 <input type="text" id="searchInput" placeholder="Suche nach Titel oder URL..." />
                 <button class="search-clear-btn" id="searchClearBtn" title="Suche leeren">✕</button>
+            </div>
+            <button class="btn-icon header-btn-semantic" id="headerSemanticBtn" title="Semantische Suche">✨</button>
+            <div class="date-dd-wrap" id="dateDDWrap">
+                <button class="btn-icon date-dd-btn" id="dateDDBtn" title="Zeitraum filtern">📅<span class="dd-label" id="dateDDLabel"></span></button>
+                <div class="date-dd-panel" id="dateDDPanel">
+                    <label><span data-i18n="map_from">Von</span><input type="date" id="hdrDateFrom" /></label>
+                    <label><span data-i18n="map_to">Bis</span><input type="date" id="hdrDateTo" /></label>
+                    <button class="date-dd-reset" id="dateDDReset">✕ <span data-i18n="mw_all">Alle</span></button>
+                </div>
             </div>
             <button class="btn-icon" id="refreshBtn" title="Neu laden">
                 <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -1497,6 +1675,7 @@
                 </svg>
             </button>
             <button class="btn-icon header-btn-llm" id="headerLlmBtn" title="Zusammenfassungen erstellen">🧠</button>
+            <button class="btn-icon header-btn-map" id="viewToggleBtn" title="Themenkarte anzeigen">🗺️</button>
             <button class="btn-icon header-btn-add" id="headerAddBtn" title="Link hinzufügen">➕</button>
         </div>
     </div>
@@ -1659,12 +1838,96 @@ const translations = {
         included_tooltip_off: 'Vormerken: Aus',
         marked_tooltip_on: 'Favorit: An',
         marked_tooltip_off: 'Favorit: Aus',
+
+        menu_map: 'Themenkarte',
+        map_title: '🗺️ Themenkarte',
+        map_search_placeholder: 'Auf der Karte suchen (Titel oder Thema)...',
+        map_semantic: 'Semantik',
+        map_from: 'Von',
+        map_to: 'Bis',
+        map_points: 'Punkte',
+        map_missing_vecs: 'ohne Vektor',
+        map_hint: 'Scrollen = Zoom · Ziehen = Verschieben · Punkt anklicken = Artikel öffnen',
+        map_embedding: 'Einbettungen werden erstellt …',
+        map_projecting: 'Karte wird berechnet (t-SNE) …',
+        map_waiting: 'Hintergrundjob läuft bereits …',
+        map_needs_embeddings: 'Für die Karte werden Embeddings benötigt.',
+        map_embed_btn: 'Jetzt einbetten',
+        map_open_job_error: 'Karten-Job fehlgeschlagen:',
+        map_hits: 'Treffer',
+        map_no_hits: 'Keine Treffer',
+        map_focus_hits: 'Treffer zeigen',
+        map_clear_search: '✕',
+        map_click_open: 'Klicken zum Öffnen',
+        map_uncategorized: 'Ohne Kategorie',
+        filter_semantic_title: 'Semantische Suche über die Embedding-Vektoren (RAG)',
+        view_to_map: 'Themenkarte anzeigen',
+        view_to_list: 'Zur Listenansicht wechseln',
+        mw_window: 'Zeitfenster',
+        mw_all: 'Alle',
+        mw_days: 'Tage',
+        mw_older: 'Älter',
+        mw_newer: 'Neuer',
+        mw_play: 'Zeitfenster automatisch durchlaufen',
+        rg_draw: 'Bereich zeichnen',
+        rg_draw_hint: '✏ Bereich zeichnen: Klicken setzt Ecken · Doppelklick schließt · Esc bricht ab',
+        rg_name_prompt: 'Name für diesen Bereich:',
+        rg_min3: 'Mindestens 3 Ecken setzen (weiterklicken oder Doppelklick)',
+        rg_saved: 'Bereich gespeichert',
+        rg_deleted: 'Bereich gelöscht',
+        rg_title: 'Bereiche:',
+        rg_rename_title: 'Umbenennen',
+        rg_redraw: 'Neu zeichnen',
+        rg_delete: 'Löschen',
+        rg_delete_confirm: 'Bereich „%s“ löschen?',
     },
     en: {
         menu_manual:   'Manual',
         menu_config:   'Configuration',
         menu_categorize: 'Categorize',
         btn_process:  'Summarize',
+
+        menu_map: 'Topic Map',
+        map_title: '🗺️ Topic Map',
+        map_search_placeholder: 'Search on the map (title or topic)...',
+        map_semantic: 'Semantic',
+        map_from: 'From',
+        map_to: 'To',
+        map_points: 'points',
+        map_missing_vecs: 'without vector',
+        map_hint: 'Scroll = zoom · drag = pan · click a point to open the article',
+        map_embedding: 'Creating embeddings …',
+        map_projecting: 'Computing map layout (t-SNE) …',
+        map_waiting: 'Background job already running …',
+        map_needs_embeddings: 'The map needs embeddings first.',
+        map_embed_btn: 'Embed now',
+        map_open_job_error: 'Map job failed:',
+        map_hits: 'hits',
+        map_no_hits: 'No hits',
+        map_focus_hits: 'Focus hits',
+        map_clear_search: '✕',
+        map_click_open: 'Click to open',
+        map_uncategorized: 'Uncategorized',
+        filter_semantic_title: 'Semantic search over the embedding vectors (RAG)',
+        view_to_map: 'Show topic map',
+        view_to_list: 'Switch to list view',
+        mw_window: 'Time window',
+        mw_all: 'All',
+        mw_days: 'days',
+        mw_older: 'Older',
+        mw_newer: 'Newer',
+        mw_play: 'Step through time automatically',
+        rg_draw: 'Draw region',
+        rg_draw_hint: '✏ Drawing region: click to set corners · double-click closes · Esc cancels',
+        rg_name_prompt: 'Name for this region:',
+        rg_min3: 'Set at least 3 corners (keep clicking or double-click)',
+        rg_saved: 'Region saved',
+        rg_deleted: 'Region deleted',
+        rg_title: 'Regions:',
+        rg_rename_title: 'Rename',
+        rg_redraw: 'Redraw',
+        rg_delete: 'Delete',
+        rg_delete_confirm: "Delete region '%s'?",
         menu_language: 'Language / Sprache',
         search_placeholder: 'Search by title or URL...',
         all_categories: 'All',
@@ -1790,6 +2053,7 @@ let activeCategory = '';
 let activeIncludeFilter = ''; // 'true' | 'false' | ''
 let activeMarkedFilter = '';  // 'true' | 'false' | ''
 let activeReadFilter = '';    // 'true' | 'false' | ''
+let activeSemanticSearch = false; // RAG-Suche über Embedding-Vektoren
 let catColorMap    = {};
 let currentView    = 'list';
 let currentLink    = null;
@@ -1813,6 +2077,7 @@ async function api(path) {
 // ── Router (hash-based) ───────────────────────────────────
 async function checkRoute() {
     const hash = location.hash;
+    if (hash === '#map') { await showMap(); return; }
     if (hash.startsWith('#link/')) {
         const id = parseInt(hash.split('/')[1], 10);
         if (!isNaN(id)) { await showDetail(id); return; }
@@ -1832,7 +2097,12 @@ async function load() {
         if (activeMarkedFilter) url += '&marked=' + activeMarkedFilter;
         if (activeReadFilter) url += '&read=' + activeReadFilter;
         const q = searchInput.value.trim();
-        if (q) url += '&q=' + encodeURIComponent(q);
+        if (q) {
+            url += '&q=' + encodeURIComponent(q);
+            if (activeSemanticSearch) url += '&semantic=true';
+        }
+        if (activeDateFrom) url += '&date_from=' + encodeURIComponent(activeDateFrom);
+        if (activeDateTo) url += '&date_to=' + encodeURIComponent(activeDateTo);
 
         const [pageData, cats] = await Promise.all([
             api(url),
@@ -1863,6 +2133,11 @@ async function load() {
                 renderDetail(link);
             } catch { showList(); }
         }
+    } else if (currentView === 'map') {
+        // Karte nicht überschreiben – nur Legende/Daten auffrischen
+        buildMapLegend();
+        updateMapStatsLine();
+        requestMapDraw();
     } else {
         showList();
     }
@@ -1873,6 +2148,10 @@ function showList() {
     currentView = 'list';
     location.hash = '';
     searchRow.style.display = 'flex';
+    searchInput.placeholder = __('search_placeholder');
+    stopMapPoll();
+    mapWindowStopPlay();
+    updateViewToggle();
     renderList(allLinks);
 }
 
@@ -1880,6 +2159,8 @@ function showList() {
 async function showDetail(id) {
     currentView = 'detail';
     searchRow.style.display = 'none';
+    stopMapPoll();
+    mapWindowStopPlay();
     window.scrollTo(0, 0);
 
     // Immer via /api/share laden – enthält content (list cache hat content=null)
@@ -1899,6 +2180,929 @@ async function showDetail(id) {
             renderDetail(link);
         }
     } catch { /* ignore */ }
+}
+
+// ── Vectormap (#map) ──────────────────────────────────────
+const MAP_PALETTE = ['#60a5fa','#f472b6','#34d399','#fbbf24','#a78bfa','#fb923c','#818cf8','#2dd4bf'];
+
+const mapState = {
+    points: [],            // {id,x,y,title,category,timestamp,read}
+    visible: [],           // indices into points passing filters
+    hiddenCats: new Set(),
+    scores: null,          // Map(id → 0..1) or null (Suche)
+    windowSet: null,       // Set(ids im Zeitraum) oder null
+    regions: [],           // handgezeichnete Bereiche {id,name,polygon,color}
+    draw: null,            // Zeichenmodus {id,name,color,pts:[[x,y],...]} | null
+    hitsInfo: '',
+    scale: 10, tx: 0, ty: 0, fitScale: 10,
+    hoverIdx: -1,
+    pointers: new Map(),   // pointerId → {x,y}
+    pinchDist: 0,
+    dragMoved: false,
+    rafPending: false,
+    pollTimer: null,
+    semanticTimer: null,
+    canvas: null, ctx: null, wrapEl: null, tooltipEl: null,
+    ro: null,
+};
+
+// Gemeinsame Suchzeilen-Filter (Liste & Karte)
+let activeDateFrom = '';
+let activeDateTo = '';
+
+function mapColorOf(p) {
+    if (!p.category) return '#9ca3af';
+    const i = catColorMap[p.category];
+    if (i === undefined) return '#9ca3af';
+    return MAP_PALETTE[i % MAP_PALETTE.length];
+}
+
+function mapW2S(x, y) { return [x * mapState.scale + mapState.tx, y * mapState.scale + mapState.ty]; }
+function mapS2W(x, y) { return [(x - mapState.tx) / mapState.scale, (y - mapState.ty) / mapState.scale]; }
+
+async function showMap() {
+    currentView = 'map';
+    window.__cameFromMap = false;
+    // Die Suchzeile bleibt sichtbar – sie steuert jetzt beide Ansichten.
+    searchRow.style.display = 'flex';
+    searchInput.placeholder = __('map_search_placeholder');
+    stopMapPoll();
+    updateViewToggle();
+    window.scrollTo(0, 0);
+    renderMapShell();
+    await loadMapData();
+    // Vorhandenen Suchtext auf die Karte anwenden (zusammengeführte Suchzeile).
+    scheduleMapSearch(0);
+}
+
+// Ein einzelner Umschalter: zeigt das Icon der ANDEREN Ansicht.
+function updateViewToggle() {
+    const btn = document.getElementById('viewToggleBtn');
+    if (!btn) return;
+    const onMap = currentView === 'map';
+    btn.textContent = onMap ? '📋' : '🗺️';
+    btn.title = onMap ? __('view_to_list') : __('view_to_map');
+}
+
+function renderMapShell() {
+    appEl.innerHTML = `
+        <div class="map-shell">
+            <div class="stats">
+                <span><strong>${__('map_title')}</strong></span>
+                <span class="map-stats-line" id="mapStatsLine"></span>
+                <button class="map-legend-chip" id="mapFocusBtn" style="display:none;">🎯 ${__('map_focus_hits')}</button>
+                <span style="color:var(--text-muted);">${__('map_hint')}</span>
+            </div>
+            <div class="map-toolbar">
+                <span class="hdr-date-label">${__('mw_window')}</span>
+                <select id="mwSize" class="category-select" style="width:auto;padding:0.28rem 0.5rem;font-size:0.78rem;">
+                    <option value="0" ${!mapWindowDays ? 'selected' : ''}>${__('mw_all')}</option>
+                    ${[7, 14, 30, 90].map(d => `<option value="${d}" ${mapWindowDays === d ? 'selected' : ''}>${d} ${__('mw_days')}</option>`).join('')}
+                </select>
+                <button class="btn-icon" id="mwPrev" title="${__('mw_older')}">◀</button>
+                <button class="btn-icon" id="mwPlay" title="${__('mw_play')}">${mapWindowTimer ? '⏸' : '⏩'}</button>
+                <button class="btn-icon" id="mwNext" title="${__('mw_newer')}">▶</button>
+                <span class="map-stats-line" id="mwLabel"></span>
+                <span style="flex:1;"></span>
+                <button class="btn-icon header-btn-map" id="mwDraw" title="${__('rg_draw')}">✏️</button>
+            </div>
+            <div class="map-legend" id="mapLegend"></div>
+            <div class="map-regions" id="mapRegionsList"></div>
+            <div class="map-canvas-wrap" id="mapWrap">
+                <canvas id="mapCanvas"></canvas>
+                <div class="map-tooltip" id="mapTooltip"></div>
+            </div>
+        </div>`;
+
+    mapState.canvas  = document.getElementById('mapCanvas');
+    mapState.wrapEl  = document.getElementById('mapWrap');
+    mapState.tooltipEl = document.getElementById('mapTooltip');
+    mapState.ctx = mapState.canvas.getContext('2d');
+
+    // Suche/Datum/Semantik kommen aus der gemeinsamen Kopfzeile.
+    document.getElementById('mapFocusBtn').addEventListener('click', focusMapHits);
+    document.getElementById('mwSize').addEventListener('change', (e) => {
+        mapWindowDays = parseInt(e.target.value, 10) || 0;
+        mapWindowStopPlay();
+        mapWindowAnchorMs = null;
+        if (!mapWindowDays) {
+            mapWindowReset();
+        } else {
+            mapWindowApply();
+        }
+    });
+    document.getElementById('mwPrev').addEventListener('click', () => mapWindowStep(-1));
+    document.getElementById('mwNext').addEventListener('click', () => mapWindowStep(1));
+    document.getElementById('mwPlay').addEventListener('click', mapWindowTogglePlay);
+    document.getElementById('mwDraw').addEventListener('click', () => {
+        if (mapState.draw) cancelRegionDraw();
+        else startRegionDraw(null);
+    });
+    renderRegionsList();
+
+    setupMapCanvasEvents();
+    if (mapState.ro) mapState.ro.disconnect();
+    mapState.ro = new ResizeObserver(() => resizeMapCanvas());
+    mapState.ro.observe(mapState.wrapEl);
+    resizeMapCanvas();
+
+    if (mapWindowDays) updateMwLabel(); // Zustand nach View-Wechsel wiederherstellen
+}
+
+function updateMapStatsLine() {
+    const el = document.getElementById('mapStatsLine');
+    if (!el) return;
+    const c = mapState.counts;
+    el.innerHTML = `<span>${c.embedded} ${__('map_points')}</span>` +
+        (c.missing > 0 ? `<span style="color:var(--text-muted);">${c.missing} ${__('map_missing_vecs')}</span>` : '') +
+        (mapState.hitsInfo ? `<span style="color:#60a5fa;">${mapState.hitsInfo}</span>` : '');
+}
+
+async function loadMapData() {
+    try {
+        const d = await api('/api/map');
+        mapState.points  = d.points || [];
+        mapState.regions = d.regions || [];
+        mapState.counts  = d.counts || { embedded: 0, missing: 0, total: 0 };
+        mapState.model   = d.model || '';
+        mapState.mode    = d.mode || 'hash';
+        renderRegionsList();
+        updateMapStatsLine();
+        buildMapLegend();
+        applyMapFilters();
+        fitMapView(true);
+        requestMapDraw();
+        handleMapStatus(d.status, d.message);
+    } catch (e) {
+        appEl.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    }
+}
+
+// ── Status overlay + polling ───────────────────────────────
+function handleMapStatus(status, message) {
+    const existing = document.getElementById('mapStatusCard');
+    if (existing) existing.remove();
+    stopMapPoll();
+
+    if (status === 'ready') return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'map-status-card';
+    wrap.id = 'mapStatusCard';
+
+    if (status === 'error') {
+        wrap.innerHTML = `
+            <div class="map-status-inner">
+                <h3>${__('map_title')}</h3>
+                <p>⚠️ ${esc(message || __('map_open_job_error'))}</p>
+                <button class="map-btn-primary" id="mapRetryBtn">🔁 ${__('map_embed_btn')}</button>
+            </div>`;
+        setTimeout(() => {
+            const b = document.getElementById('mapRetryBtn');
+            if (b) b.addEventListener('click', async () => {
+                b.disabled = true;
+                try { await fetch('/api/map/embeddings', { method: 'POST' }); } catch (e) { /* ignore */ }
+                handleMapStatus('waiting');
+                startMapPoll();
+            });
+        }, 0);
+    } else if (status === 'needs-embeddings') {
+        wrap.innerHTML = `
+            <div class="map-status-inner">
+                <h3>${__('map_title')}</h3>
+                <p>${__('map_needs_embeddings')}</p>
+                <button class="map-btn-primary" id="mapEmbedNowBtn">🚀 ${__('map_embed_btn')}</button>
+            </div>`;
+        setTimeout(() => {
+            const b = document.getElementById('mapEmbedNowBtn');
+            if (b) b.addEventListener('click', async () => {
+                b.disabled = true;
+                try { await fetch('/api/map/embeddings', { method: 'POST' }); } catch (e) { /* ignore */ }
+                handleMapStatus('waiting');
+                startMapPoll();
+            });
+        }, 0);
+    } else {
+        const msg = status === 'embedding' ? __('map_embedding')
+                  : status === 'projecting' ? __('map_projecting')
+                  : __('map_waiting');
+        wrap.innerHTML = `
+            <div class="map-status-inner">
+                <h3>${__('map_title')}</h3>
+                <p>${msg}</p>
+                <div class="map-progress-track"><div class="map-progress-fill" id="mapProgressFill" style="width:8%;"></div></div>
+                <p id="mapProgressMsg" style="font-size:0.72rem;"></p>
+            </div>`;
+        startMapPoll();
+    }
+    if (mapState.wrapEl) mapState.wrapEl.appendChild(wrap);
+}
+
+function startMapPoll() {
+    stopMapPoll();
+    mapState.pollTimer = setInterval(async () => {
+        if (currentView !== 'map') { stopMapPoll(); return; }
+        try {
+            const s = await api('/api/map/status');
+            const job = s.job || {};
+            if (!job.running) {
+                stopMapPoll();
+                if (job.phase === 'error') {
+                    showToast('⚠️ ' + __('map_open_job_error') + ' ' + (job.message || ''));
+                }
+                await loadMapData();
+            } else {
+                const fill = document.getElementById('mapProgressFill');
+                const msg  = document.getElementById('mapProgressMsg');
+                if (fill) fill.style.width = Math.max(5, job.pct || 0) + '%';
+                if (msg) msg.textContent = `${job.phase || ''} ${job.done || 0}/${job.total || 0}`;
+            }
+        } catch (e) { /* transient */ }
+    }, 1000);
+}
+
+function stopMapPoll() {
+    if (mapState.pollTimer) { clearInterval(mapState.pollTimer); mapState.pollTimer = null; }
+}
+
+// ── Filters & search ───────────────────────────────────────
+// ── Zeitfenster (7/14/30/90 Tage) für die Karte ───────────
+// Das Layout bleibt fix (aus allen Daten berechnet); das Fenster blendet
+// jeweils die im Zeitraum aktiven Themen ein. Schalten = Fenster verschieben.
+let mapWindowDays = 0;        // 0 = aus
+let mapWindowAnchorMs = null; // Fensterende als ms-Zeitstempel
+let mapWindowTimer = null;
+
+function mapTsBounds() {
+    let min = Infinity, max = -Infinity;
+    for (const p of mapState.points) {
+        if (!p.timestamp) continue;
+        const t = Date.parse(p.timestamp);
+        if (isNaN(t)) continue;
+        if (t < min) min = t;
+        if (t > max) max = t;
+    }
+    if (!isFinite(min)) return null;
+    return { min, max };
+}
+
+const DAY_MS = 86400000;
+
+function isoDay(ms) { return new Date(ms).toISOString().slice(0, 10); }
+
+function fmtDay(ms) {
+    return new Date(ms).toLocaleDateString(currentLang === 'en' ? 'en-US' : 'de-DE', {
+        day: '2-digit', month: 'short', year: '2-digit'
+    });
+}
+
+function mapWindowRange() {
+    const b = mapTsBounds();
+    const end = (mapWindowAnchorMs !== null && b) ? Math.min(mapWindowAnchorMs, b.max) : (b ? b.max : Date.now());
+    const start = end - (mapWindowDays - 1) * DAY_MS;
+    return { start, end };
+}
+
+function mapWindowApply() {
+    const r = mapWindowRange();
+    activeDateFrom = isoDay(r.start);
+    activeDateTo = isoDay(r.end);
+    syncHeaderDateInputs();
+    applyMapFilters(); // ruft am Ende auch updateMwLabel()
+}
+
+function mapWindowStep(dir) { // -1 = älter, +1 = neuer
+    if (!mapWindowDays) return;
+    const b = mapTsBounds();
+    if (!b) return;
+    let end = (mapWindowAnchorMs !== null) ? mapWindowAnchorMs : b.max;
+    end += dir * mapWindowDays * DAY_MS;
+    if (end > b.max) end = b.max;
+    const earliestEnd = b.min + (mapWindowDays - 1) * DAY_MS;
+    if (end < earliestEnd) end = earliestEnd;
+    mapWindowAnchorMs = end;
+    mapWindowApply();
+}
+
+function mapWindowReset() {
+    // „Alle": Fenster aus, Datumsfilter komplett leeren
+    activeDateFrom = '';
+    activeDateTo = '';
+    syncHeaderDateInputs();
+    applyMapFilters();
+    updateMwLabel();
+}
+
+function mapWindowStopPlay() {
+    if (mapWindowTimer) {
+        clearInterval(mapWindowTimer);
+        mapWindowTimer = null;
+        const btn = document.getElementById('mwPlay');
+        if (btn) btn.textContent = '⏩';
+    }
+}
+
+function mapWindowTogglePlay() {
+    if (mapWindowTimer) { mapWindowStopPlay(); return; }
+    const btn = document.getElementById('mwPlay');
+    if (btn) btn.textContent = '⏸';
+    mapWindowTimer = setInterval(() => {
+        const b = mapTsBounds();
+        if (!b || !mapWindowDays) { mapWindowStopPlay(); return; }
+        const r = mapWindowRange();
+        if (r.end >= b.max) {
+            // am neuesten Ende angekommen → vor zum ältesten Fenster springen
+            mapWindowAnchorMs = b.min + (mapWindowDays - 1) * DAY_MS;
+            mapWindowApply();
+        } else {
+            mapWindowStep(1);
+        }
+    }, 1600);
+}
+
+// ── Handgezeichnete Bereiche (persistent in map_regions) ──
+function startRegionDraw(existing) {
+    mapState.draw = existing
+        ? { id: existing.id, name: existing.name, color: existing.color || '', pts: [] }
+        : { id: null, name: '', color: '', pts: [] };
+    mapState.wrapEl.classList.add('drawing');
+    hideMapTooltip();
+    showToast(__('rg_draw_hint'));
+    requestMapDraw();
+}
+
+function cancelRegionDraw() {
+    mapState.draw = null;
+    if (mapState.wrapEl) mapState.wrapEl.classList.remove('drawing');
+    requestMapDraw();
+}
+
+async function finishRegionDraw() {
+    const d = mapState.draw;
+    if (!d) return;
+    if (d.pts.length < 3) {
+        showToast(__('rg_min3'));
+        return; // weiter zeichnen lassen
+    }
+    let name = d.name;
+    if (!name) {
+        name = prompt(__('rg_name_prompt'), '');
+        if (name === null) { cancelRegionDraw(); return; }
+        name = name.trim();
+        if (!name) { cancelRegionDraw(); return; }
+    }
+    const payload = { name, polygon: d.pts };
+    try {
+        let id = d.id;
+        if (id) {
+            await apiRegion('PUT', `?id=${id}`, payload);
+            const rg = mapState.regions.find(r => r.id === id);
+            if (rg) { rg.name = name; rg.polygon = d.pts; }
+        } else {
+            const res = await apiRegion('POST', '', payload);
+            id = res.id;
+            mapState.regions.push({ id, name, polygon: d.pts, color: regionColor(id) });
+        }
+        renderRegionsList();
+        showToast('✅ ' + __('rg_saved'));
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+    mapState.draw = null;
+    mapState.wrapEl.classList.remove('drawing');
+    requestMapDraw();
+}
+
+function apiRegion(method, qs, body) {
+    return fetch('/api/map/regions' + (qs || ''), {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+    }).then(async r => {
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+        return j;
+    });
+}
+
+async function renameRegion(rg) {
+    const name = prompt(__('rg_name_prompt'), rg.name);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === rg.name) return;
+    try {
+        await apiRegion('PUT', `?id=${rg.id}`, { name: trimmed });
+        rg.name = trimmed;
+        renderRegionsList();
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+async function deleteRegion(rg) {
+    if (!confirm(__('rg_delete_confirm').replace('%s', rg.name))) return;
+    try {
+        await apiRegion('DELETE', `?id=${rg.id}`);
+        mapState.regions = mapState.regions.filter(r => r.id !== rg.id);
+        renderRegionsList();
+        requestMapDraw();
+        showToast('🗑️ ' + __('rg_deleted'));
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+function renderRegionsList() {
+    const el = document.getElementById('mapRegionsList');
+    if (!el) return;
+    if (mapState.regions.length === 0) { el.innerHTML = ''; return; }
+    el.innerHTML = '<span class="hdr-date-label">' + esc(__('rg_title')) + '</span>' +
+        mapState.regions.map(rg => `
+        <span class="map-legend-chip region-chip">
+            <span class="map-legend-dot" style="background:${rg.color || regionColor(rg.id)};"></span>
+            <span class="rg-name" data-rg="${rg.id}" data-action="rename" title="${__('rg_rename_title')}">${esc(rg.name)}</span>
+            <button data-rg="${rg.id}" data-action="redraw" title="${__('rg_redraw')}">✏️</button>
+            <button data-rg="${rg.id}" data-action="delete" title="${__('rg_delete')}">🗑️</button>
+        </span>`).join('');
+
+    el.querySelectorAll('[data-action]').forEach(btnEl => {
+        btnEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = parseInt(btnEl.dataset.rg, 10);
+            const rg = mapState.regions.find(r => r.id === id);
+            if (!rg) return;
+            if (btnEl.dataset.action === 'rename') renameRegion(rg);
+            else if (btnEl.dataset.action === 'redraw') startRegionDraw(rg);
+            else deleteRegion(rg);
+        });
+    });
+}
+
+function updateMwLabel() {
+    const el = document.getElementById('mwLabel');
+    if (!el) return;
+    if (!mapWindowDays) { el.textContent = ''; return; }
+    const r = mapWindowRange();
+    el.innerHTML = `<span style="color:#a78bfa;">${fmtDay(r.start)} – ${fmtDay(r.end)}</span>` +
+        `<span style="color:var(--text-muted);">· ${mapState.visible.length} ${__('map_points')}</span>`;
+}
+
+function syncHeaderDateInputs() {
+    const f = document.getElementById('hdrDateFrom');
+    const t = document.getElementById('hdrDateTo');
+    if (f) f.value = activeDateFrom;
+    if (t) t.value = activeDateTo;
+    updateDateDDLabel();
+}
+
+function updateDateDDLabel() {
+    const btn = document.getElementById('dateDDBtn');
+    const lbl = document.getElementById('dateDDLabel');
+    if (!btn || !lbl) return;
+    if (activeDateFrom || activeDateTo) {
+        btn.classList.add('active');
+        lbl.textContent = (activeDateFrom || '…') + ' – ' + (activeDateTo || '…');
+    } else {
+        btn.classList.remove('active');
+        lbl.textContent = '';
+    }
+}
+
+function applyMapFilters() {
+    // Kategorien filtern die Punktemenge; der Zeitraum wirkt nur als Hervorhebung
+    // (konsistent zur Suche: nichts verschwindet, alles andere wird abgedimmt).
+    mapState.visible = [];
+    for (let i = 0; i < mapState.points.length; i++) {
+        const p = mapState.points[i];
+        if (p.category && mapState.hiddenCats.has(p.category)) continue;
+        mapState.visible.push(i);
+    }
+
+    mapState.windowSet = null;
+    if (activeDateFrom || activeDateTo) {
+        const set = new Set();
+        for (const p of mapState.points) {
+            if (!p.timestamp || p.timestamp.length < 10) continue;
+            const d = p.timestamp.slice(0, 10);
+            if (activeDateFrom && d < activeDateFrom) continue;
+            if (activeDateTo && d > activeDateTo) continue;
+            set.add(p.id);
+        }
+        mapState.windowSet = set;
+    }
+    scheduleMapSearch(0);
+    if (mapWindowDays || mapWindowTimer) updateMwLabel();
+}
+
+// scheduleMapSearch runs updateMapSearch debounced (semantic queries hit the API).
+function scheduleMapSearch(delay) {
+    clearTimeout(mapState.semanticTimer);
+    mapState.semanticTimer = setTimeout(updateMapSearch, delay === undefined ? 300 : delay);
+}
+
+function updateMapSearch() {
+    const q = searchInput.value.trim();
+    mapState.hitsInfo = '';
+    if (!q) {
+        mapState.scores = null;
+        updateMapStatsLine();
+        requestMapDraw();
+        return;
+    }
+    if (!activeSemanticSearch) {
+        const ql = q.toLowerCase();
+        mapState.scores = new Map();
+        let n = 0;
+        for (const i of mapState.visible) {
+            const p = mapState.points[i];
+            if ((p.title || '').toLowerCase().includes(ql)) { mapState.scores.set(p.id, 0.7); n++; }
+        }
+        mapState.hitsInfo = n > 0 ? `${n} ${__('map_hits')}` : __('map_no_hits');
+        const fb = document.getElementById('mapFocusBtn');
+        if (fb) fb.style.display = n > 0 ? '' : 'none';
+        updateMapStatsLine();
+        requestMapDraw();
+        return;
+    }
+    // semantic: debounced server call (updateMapSearch already runs in a timer)
+    runMapSemanticQuery(q);
+}
+
+async function runMapSemanticQuery(q) {
+    try {
+        const r = await fetch('/api/map/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        // Ignore stale responses.
+        if (q !== searchInput.value.trim()) return;
+        mapState.scores = new Map();
+        (d.scores || []).forEach(s => mapState.scores.set(s.id, s.score));
+        mapState.hitsInfo = mapState.scores.size > 0
+            ? `${mapState.scores.size} ${__('map_hits')}` : __('map_no_hits');
+        const fb = document.getElementById('mapFocusBtn');
+        if (fb) fb.style.display = mapState.scores.size > 0 ? '' : 'none';
+        updateMapStatsLine();
+        requestMapDraw();
+    } catch (e) {
+        mapState.hitsInfo = '⚠️ ' + esc(e.message);
+        updateMapStatsLine();
+    }
+}
+
+function focusMapHits() {
+    if (!mapState.scores || mapState.scores.size === 0) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const i of mapState.visible) {
+        const p = mapState.points[i];
+        if (!mapState.scores.has(p.id)) continue;
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    }
+    if (!isFinite(minX)) return;
+    fitViewToBounds(minX, minY, maxX, maxY);
+    requestMapDraw();
+}
+
+function buildMapLegend() {
+    const el = document.getElementById('mapLegend');
+    if (!el) return;
+    const counts = new Map();
+    for (const p of mapState.points) {
+        const key = p.category || '';
+        counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    const ordered = [];
+    for (const c of (Array.isArray(categories) ? categories : [])) {
+        if (counts.has(c.name)) { ordered.push(c.name); counts.delete(c.name); }
+    }
+    for (const k of counts.keys()) ordered.push(k);
+
+    el.innerHTML = ordered.map(name => {
+        const col = name ? mapColorOf({ category: name }) : '#9ca3af';
+        const label = esc(name || __('map_uncategorized'));
+        const hidden = name && mapState.hiddenCats.has(name) ? 'hidden-cat' : '';
+        return `<span class="map-legend-chip ${hidden}" data-cat="${escAttr(name)}">
+            <span class="map-legend-dot" style="background:${col};"></span>${label} (${counts.get(name) || 0})</span>`;
+    }).join('');
+
+    el.querySelectorAll('.map-legend-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const cat = chip.getAttribute('data-cat');
+            if (!cat) return;
+            if (mapState.hiddenCats.has(cat)) mapState.hiddenCats.delete(cat);
+            else mapState.hiddenCats.add(cat);
+            chip.classList.toggle('hidden-cat');
+            applyMapFilters();
+        });
+    });
+}
+
+// ── Canvas: size, transform, drawing ───────────────────────
+function resizeMapCanvas() {
+    const c = mapState.canvas, wrap = mapState.wrapEl;
+    if (!c || !wrap) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    c.width = Math.max(1, Math.round(w * dpr));
+    c.height = Math.max(1, Math.round(h * dpr));
+    requestMapDraw();
+}
+
+function mapBounds() {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of mapState.points) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    }
+    if (!isFinite(minX)) return null;
+    return { minX, minY, maxX, maxY };
+}
+
+function fitViewToBounds(minX, minY, maxX, maxY) {
+    const w = mapState.wrapEl.clientWidth || 800;
+    const h = mapState.wrapEl.clientHeight || 600;
+    const bw = Math.max(maxX - minX, 1e-6);
+    const bh = Math.max(maxY - minY, 1e-6);
+    const s = Math.min(w / bw, h / bh) * 0.88;
+    mapState.scale = s;
+    mapState.fitScale = s;
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    mapState.tx = w / 2 - cx * s;
+    mapState.ty = h / 2 - cy * s;
+}
+
+function fitMapView(reset) {
+    const b = mapBounds();
+    if (!b) return;
+    if (!reset && mapState._userNavigated) return;
+    fitViewToBounds(b.minX, b.minY, b.maxX, b.maxY);
+}
+
+function requestMapDraw() {
+    if (mapState.rafPending) return;
+    mapState.rafPending = true;
+    requestAnimationFrame(drawMapFrame);
+}
+
+function drawMapFrame() {
+    mapState.rafPending = false;
+    const c = mapState.canvas, ctx = mapState.ctx;
+    if (!c || !ctx) return;
+    const w = c.clientWidth, h = c.clientHeight;
+    if (c.width === 0 || c.height === 0) return;
+    const bg = getComputedStyle(mapState.wrapEl).backgroundColor || '#111';
+    ctx.setTransform(c.width / w, 0, 0, c.height / h, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    // Handgezeichnete Bereiche unter den Punkten
+    for (const rg of mapState.regions) {
+        drawRegionShape(ctx, rg.polygon, rg.color || regionColor(rg.id), false);
+    }
+
+    const pts = mapState.points;
+    let hoverScreen = null;
+    const hasSearch = !!mapState.scores;
+    const hasWindow = !!mapState.windowSet;
+    for (const i of mapState.visible) {
+        const p = pts[i];
+        const sx = p.x * mapState.scale + mapState.tx;
+        const sy = p.y * mapState.scale + mapState.ty;
+        if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue;
+
+        let r = 3.2;
+        let alpha = 1;
+        if (p.read) alpha *= 0.45;
+        const sHit = !hasSearch || mapState.scores.has(p.id);
+        const wHit = !hasWindow || mapState.windowSet.has(p.id);
+        if (!sHit || !wHit) {
+            alpha *= 0.12; // von Suche/Zeitfenster nicht getroffen → abgedimmt
+        } else if (hasSearch) {
+            r = 3.5 + Math.min(5, 1.5 + mapState.scores.get(p.id) * 4.5);
+            alpha = Math.min(1, alpha + 0.35);
+        } else if (hasWindow) {
+            r += 0.7;
+            alpha = Math.min(1, alpha + 0.35);
+        }
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = mapColorOf(p);
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, 6.283185307);
+        ctx.fill();
+
+        if (i === mapState.hoverIdx) {
+            hoverScreen = [sx, sy];
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r + 3.5, 0, 6.283185307);
+            ctx.stroke();
+        }
+    }
+    ctx.globalAlpha = 1;
+
+    // Zeichenvorschau über den Punkten
+    if (mapState.draw && mapState.draw.pts.length > 0) {
+        drawRegionShape(ctx, mapState.draw.pts, '#a78bfa', true);
+    }
+}
+
+function hexToRgba(hex, a) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+    if (!m) return `rgba(167,139,250,${a})`;
+    return `rgba(${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)},${a})`;
+}
+
+function regionColor(id) { return MAP_PALETTE[(id - 1) % MAP_PALETTE.length]; }
+
+// drawRegionShape zeichnet ein Polygon in Weltkoordinaten.
+function drawRegionShape(ctx, poly, color, isPreview) {
+    if (!poly || poly.length === 0) return;
+    ctx.beginPath();
+    for (let k = 0; k < poly.length; k++) {
+        const sx = poly[k][0] * mapState.scale + mapState.tx;
+        const sy = poly[k][1] * mapState.scale + mapState.ty;
+        if (k === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    if (!isPreview || poly.length >= 3) ctx.closePath();
+    ctx.fillStyle = hexToRgba(color, isPreview ? 0.07 : 0.12);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isPreview ? 1.5 : 2;
+    if (isPreview) ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (isPreview) {
+        ctx.fillStyle = color;
+        for (const pt of poly) {
+            const sx = pt[0] * mapState.scale + mapState.tx;
+            const sy = pt[1] * mapState.scale + mapState.ty;
+            ctx.fillRect(sx - 2.5, sy - 2.5, 5, 5);
+        }
+    }
+}
+
+// ── Canvas interactions ────────────────────────────────────
+function setupMapCanvasEvents() {
+    const c = mapState.canvas, wrap = mapState.wrapEl;
+
+    c.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = c.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const [wx, wy] = mapS2W(mx, my);
+        const factor = Math.exp(-e.deltaY * 0.0012);
+        const minS = mapState.fitScale * 0.4;
+        const maxS = mapState.fitScale * 60;
+        const ns = Math.min(maxS, Math.max(minS, mapState.scale * factor));
+        mapState.scale = ns;
+        mapState.tx = mx - wx * ns;
+        mapState.ty = my - wy * ns;
+        mapState._userNavigated = true;
+        hideMapTooltip();
+        requestMapDraw();
+    }, { passive: false });
+
+    c.addEventListener('pointerdown', (e) => {
+        if (mapState.draw) return; // im Zeichenmodus kein Pan/Kapturen
+        c.setPointerCapture(e.pointerId);
+        mapState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        mapState.dragMoved = false;
+        if (mapState.pointers.size === 2) {
+            const ptsArr = [...mapState.pointers.values()];
+            mapState.pinchDist = Math.hypot(ptsArr[0].x - ptsArr[1].x, ptsArr[0].y - ptsArr[1].y);
+        }
+    });
+
+    c.addEventListener('pointermove', (e) => {
+        if (mapState.pointers.has(e.pointerId)) {
+            const prev = mapState.pointers.get(e.pointerId);
+            const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+            mapState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+            if (mapState.pointers.size === 1) {
+                if (Math.abs(dx) + Math.abs(dy) > 0) {
+                    if (!mapState.dragMoved && Math.abs(dx) + Math.abs(dy) > 2) mapState.dragMoved = true;
+                    if (mapState.dragMoved) {
+                        mapState.tx += dx;
+                        mapState.ty += dy;
+                        wrap.classList.add('panning');
+                        mapState._userNavigated = true;
+                        hideMapTooltip();
+                        requestMapDraw();
+                    }
+                }
+            } else if (mapState.pointers.size === 2) {
+                const arr = [...mapState.pointers.values()];
+                const dist = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+                const rect = c.getBoundingClientRect();
+                const midX = (arr[0].x + arr[1].x) / 2 - rect.left;
+                const midY = (arr[0].y + arr[1].y) / 2 - rect.top;
+                const [wx, wy] = mapS2W(midX, midY);
+                if (mapState.pinchDist > 0) {
+                    const factor = dist / mapState.pinchDist;
+                    const minS = mapState.fitScale * 0.4;
+                    const maxS = mapState.fitScale * 60;
+                    mapState.scale = Math.min(maxS, Math.max(minS, mapState.scale * factor));
+                }
+                mapState.pinchDist = dist;
+                mapState.tx = midX - wx * mapState.scale;
+                mapState.ty = midY - wy * mapState.scale;
+                mapState.dragMoved = true;
+                mapState._userNavigated = true;
+                hideMapTooltip();
+                requestMapDraw();
+            }
+            return;
+        }
+        if (mapState.draw) return; // kein Hover-Highlight während des Zeichnens
+        // hover detection (no button pressed)
+        updateMapHover(e);
+    });
+
+    // ── Bereich zeichnen ──
+    c.addEventListener('click', (e) => {
+        if (!mapState.draw) return;
+        const rect = c.getBoundingClientRect();
+        const [wx, wy] = mapS2W(e.clientX - rect.left, e.clientY - rect.top);
+        mapState.draw.pts.push([Math.round(wx * 100) / 100, Math.round(wy * 100) / 100]);
+        requestMapDraw();
+    });
+    c.addEventListener('dblclick', () => {
+        if (!mapState.draw) return;
+        finishRegionDraw();
+    });
+
+    function endPointer(e) {
+        const had = mapState.pointers.delete(e.pointerId);
+        wrap.classList.remove('panning');
+        if (had && !mapState.dragMoved && mapState.pointers.size === 0) {
+            // treat as tap/click
+            updateMapHover(e);
+            if (mapState.hoverIdx >= 0) {
+                const p = mapState.points[mapState.hoverIdx];
+                window.__cameFromMap = true;
+                location.hash = '#link/' + p.id;
+            }
+        }
+        if (mapState.pointers.size === 0) mapState.dragMoved = false;
+    }
+    c.addEventListener('pointerup', endPointer);
+    c.addEventListener('pointercancel', endPointer);
+    c.addEventListener('pointerleave', () => { hideMapTooltip(); });
+}
+
+function updateMapHover(e) {
+    const c = mapState.canvas;
+    if (!c) return;
+    const rect = c.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    let best = -1, bestD = 13 * 13;
+    for (const i of mapState.visible) {
+        const p = mapState.points[i];
+        const sx = p.x * mapState.scale + mapState.tx;
+        const sy = p.y * mapState.scale + mapState.ty;
+        const d = (sx - mx) * (sx - mx) + (sy - my) * (sy - my);
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best !== mapState.hoverIdx) {
+        mapState.hoverIdx = best;
+        requestMapDraw();
+    }
+    if (best >= 0) {
+        const p = mapState.points[best];
+        const tt = mapState.tooltipEl;
+        const metaBits = [];
+        if (p.category) metaBits.push(`<span style="color:${mapColorOf(p)};">●</span> ${esc(p.category)}`);
+        if (p.timestamp) metaBits.push(formatDate(p.timestamp));
+        tt.innerHTML = `<div class="tt-title">${esc(p.title || '(ohne Titel)')}</div>` +
+            (metaBits.length ? `<div class="tt-meta">${metaBits.join(' · ')}</div>` : '') +
+            `<div class="tt-hint">${__('map_click_open')}</div>`;
+        tt.classList.add('show');
+        const twrap = mapState.wrapEl;
+        let tx = mx + 14, ty = my + 14;
+        if (tx + 330 > twrap.clientWidth) tx = mx - 330;
+        if (ty + 90 > twrap.clientHeight) ty = my - 90;
+        tt.style.left = Math.max(4, tx) + 'px';
+        tt.style.top = Math.max(4, ty) + 'px';
+    } else {
+        hideMapTooltip();
+    }
+}
+
+function hideMapTooltip() {
+    if (mapState.hoverIdx !== -1) { mapState.hoverIdx = -1; requestMapDraw(); }
+    if (mapState.tooltipEl) mapState.tooltipEl.classList.remove('show');
 }
 
 // ── Pagination: kompakte Seitenzahlen mit Ellipsis ────────
@@ -1962,6 +3166,8 @@ function renderList(links) {
 
             const dateStr = link.timestamp ? formatDateShort(link.timestamp) : '';
             const readDot = (link.read === true) ? ' read' : '';
+            const scoreBadge = (typeof link.score === 'number' && link.score > 0)
+                ? `<span class="score-badge" title="Semantische Ähnlichkeit">⚡ ${link.score.toFixed(2)}</span>` : '';
 
             html += `
                 <li class="link-item" tabindex="0" data-id="${link.id}">
@@ -1969,6 +3175,7 @@ function renderList(links) {
                     <div class="link-title-wrap">
                         <a class="link-title ${readDot ? 'link-title-read' : ''}" href="#link/${link.id}">${esc(link.title)}</a>
                         <div class="link-meta-row">
+                            ${scoreBadge}
                             ${dateStr ? `<span class="link-date">${dateStr}</span>` : ''}
                             ${link.content_len > 0 ? `<span class="link-size${link.content_len >= link.content_limit ? ' warn' : ''}">${link.content_len.toLocaleString()} Chars · ~${Math.round(link.content_len / 3.5).toLocaleString()} Tokens</span>` : ''}
                             <span style="opacity:0.5;font-size:0.75rem;" title="${(link.included === true) ? __('included_tooltip_on') : __('included_tooltip_off')}">${(link.included === true) ? '▲' : '△'}</span>
@@ -2093,12 +3300,17 @@ function renderDetail(link) {
     const readStatus = (link.read === true) ? __('label_on') : __('label_off');
 
     appEl.innerHTML = `
-        <button class="detail-back" id="backBtn">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
-            </svg>
-            ${__('detail_back')}
-        </button>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1.25rem;">
+            <button class="detail-back" id="backBtn" style="margin-bottom:0;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
+                </svg>
+                ${__('detail_back')}
+            </button>
+            <span style="flex:1;"></span>
+            <button class="detail-back" id="prevLinkBtn" style="margin-bottom:0;" title="Vorheriger">‹</button>
+            <button class="detail-back" id="nextLinkBtn" style="margin-bottom:0;" title="Nächster">›</button>
+        </div>
 
         <article class="detail-card">
             <div class="detail-header ${ytThumb ? '' : 'noyt'}">
@@ -2171,11 +3383,34 @@ function renderDetail(link) {
     `;
 
     document.getElementById('backBtn').addEventListener('click', () => {
+        if (window.__cameFromMap) {
+            window.__cameFromMap = false;
+            location.hash = '#map';   // triggers showMap() via router
+            return;
+        }
         currentView = 'list';
         location.hash = '';
         searchRow.style.display = 'flex';
         renderList(allLinks);
     });
+
+    // Vorheriger / Nächster Artikel
+    const linkIdx = allLinks.findIndex(l => l.id === link.id);
+    function navigateLink(dir) {
+        if (linkIdx === -1) return;
+        const target = allLinks[linkIdx + dir];
+        if (target) location.hash = '#link/' + target.id;
+    }
+    const prevBtn = document.getElementById('prevLinkBtn');
+    const nextBtn = document.getElementById('nextLinkBtn');
+    if (prevBtn) {
+        prevBtn.style.opacity = (linkIdx > 0 && allLinks[linkIdx - 1]) ? '1' : '0.2';
+        prevBtn.addEventListener('click', () => navigateLink(-1));
+    }
+    if (nextBtn) {
+        nextBtn.style.opacity = (linkIdx >= 0 && linkIdx < allLinks.length - 1 && allLinks[linkIdx + 1]) ? '1' : '0.2';
+        nextBtn.addEventListener('click', () => navigateLink(1));
+    }
 
     document.getElementById('btnCopyUrl').addEventListener('click', () => {
         copyToClipboard(link.url);
@@ -2510,7 +3745,7 @@ async function processEntries() {
         const r = await fetchPromise;
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
-        showToast(`✅ ${data.processed || 0} created, ${data.skipped || 0} skipped${(data.errors || []).length ? `, ${data.errors.length} errors` : ''}`);
+        showToast(`✅ ${data.processed || 0} created, ${data.skipped || 0} skipped${data.categorized ? `, ${data.categorized} categorized` : ''}${(data.errors || []).length ? `, ${data.errors.length} errors` : ''}`);
 
         // Schließ Progress nach kurzer Verzögerung
         setTimeout(() => {
@@ -3019,6 +4254,94 @@ function closeLinkModal() {
 }
 
 if (headerAddBtn) headerAddBtn.addEventListener('click', openLinkModal);
+
+// ── View-Toggle + gemeinsame Suchzeilen-Steuerung ──────────
+const viewToggleBtn = document.getElementById('viewToggleBtn');
+if (viewToggleBtn) viewToggleBtn.addEventListener('click', () => {
+    window.__cameFromMap = false;
+    if (currentView === 'map' || location.hash === '#map') {
+        if (location.hash === '' || location.hash === '#') showList();
+        else location.hash = '';
+    } else {
+        if (location.hash === '#map') showMap();
+        else location.hash = '#map';
+    }
+});
+
+// Semantik-Toggle (gilt für Liste und Karte)
+const headerSemanticBtn = document.getElementById('headerSemanticBtn');
+if (headerSemanticBtn) headerSemanticBtn.addEventListener('click', () => {
+    activeSemanticSearch = !activeSemanticSearch;
+    headerSemanticBtn.classList.toggle('active', activeSemanticSearch);
+    if (currentView === 'map') {
+        scheduleMapSearch(0);
+    } else {
+        currentPage = 1;
+        load();
+    }
+});
+
+// Datumsfilter (gilt für Liste und Karte)
+function wireHeaderDate(id, setter) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = setter();
+    el.addEventListener('change', () => {
+        // Manuelle Datumseingabe beendet den Zeitfenster-Modus der Karte
+        // (Werte bleiben erhalten, nur die Fenstersteuerung wird deaktiviert).
+        if (mapWindowDays || mapWindowTimer) {
+            mapWindowStopPlay();
+            mapWindowDays = 0;
+            const sel = document.getElementById('mwSize');
+            if (sel) sel.value = '0';
+            updateMwLabel();
+        }
+        setter(el.value);
+        if (currentView === 'map') {
+            applyMapFilters();
+        } else {
+            currentPage = 1;
+            load();
+        }
+    });
+}
+wireHeaderDate('hdrDateFrom', (v) => { if (v === undefined) return activeDateFrom; activeDateFrom = v; });
+wireHeaderDate('hdrDateTo',   (v) => { if (v === undefined) return activeDateTo; activeDateTo = v; });
+
+// Datum-Dropdown auf/zu
+const dateDDWrap = document.getElementById('dateDDWrap');
+if (dateDDWrap) {
+    const ddBtn = document.getElementById('dateDDBtn');
+    const ddPanel = document.getElementById('dateDDPanel');
+    ddBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        ddPanel.classList.toggle('open');
+    });
+    document.addEventListener('click', (e) => {
+        if (ddPanel.classList.contains('open') && !dateDDWrap.contains(e.target)) {
+            ddPanel.classList.remove('open');
+        }
+    });
+    document.getElementById('dateDDReset').addEventListener('click', () => {
+        ['hdrDateFrom', 'hdrDateTo'].forEach(id => {
+            const el = document.getElementById(id);
+            el.value = '';
+            el.dispatchEvent(new Event('change'));
+        });
+        ddPanel.classList.remove('open');
+    });
+}
+
+// Esc bricht das Zeichnen eines Bereichs ab
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mapState.draw) cancelRegionDraw();
+});
+updateDateDDLabel();
+document.getElementById('menuMap')?.addEventListener('click', () => {
+    hamburgerDropdown?.classList.remove('open');
+    if (location.hash === '#map') showMap();
+    else location.hash = '#map';
+});
 if (linkModalClose) linkModalClose.addEventListener('click', closeLinkModal);
 if (linkModalCancel) linkModalCancel.addEventListener('click', closeLinkModal);
 if (linkModalOverlay) {
@@ -3041,6 +4364,13 @@ searchInput.addEventListener('input', () => {
     // Clear-Button Sichtbarkeit
     if (searchClearBtn) searchClearBtn.classList.toggle('visible', q.length > 0);
 
+    // Karte: Suche live in die Punktefilter speisen
+    if (currentView === 'map') {
+        clearTimeout(mapState.semanticTimer);
+        mapState.semanticTimer = setTimeout(updateMapSearch, 300);
+        return;
+    }
+
     // Mobile: erst ab 4 Zeichen suchen
     const isMobile = window.matchMedia('(max-width: 600px)').matches;
     if (isMobile && q.length > 0 && q.length < 4) {
@@ -3057,6 +4387,10 @@ if (searchClearBtn) {
         searchInput.value = '';
         searchClearBtn.classList.remove('visible');
         searchInput.focus();
+        if (currentView === 'map') {
+            updateMapSearch();
+            return;
+        }
         clearTimeout(searchDebounce);
         load(); // Neu laden ohne Filter
     });
