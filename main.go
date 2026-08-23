@@ -143,6 +143,7 @@ func setupHTTPServer(app *App, listenPort int, cfg Config) *http.Server {
 	mux.HandleFunc("/api/map/status", app.handleAPI)
 	mux.HandleFunc("/api/map/query", app.handleAPI)
 	mux.HandleFunc("/api/map/regions", app.handleAPI)
+	mux.HandleFunc("/api/search", app.handleAPI)
 	mux.HandleFunc("/api/update-ytdlp", app.handleUpdateYtDlp)
 	mux.HandleFunc("/rss", app.handleRSS)
 	mux.HandleFunc("/api/feed/mark", app.handleFeedAPI)

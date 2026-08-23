@@ -108,6 +108,8 @@ func (a *App) handleAPI(w http.ResponseWriter, r *http.Request) {
 		}
 	case "/api/map/regions":
 		a.handleMapRegions(w, r)
+	case "/api/search":
+		a.handleSearch(w, r)
 	default:
 		http.NotFound(w, r)
 	}

@@ -18,6 +18,7 @@ A **single-binary web application** for collecting, managing, and summarizing li
 - **Read tracking** – Mark articles as read/unread directly from the list view
 - **RSS/Atom feed** – `/rss` endpoint with full filter support (category, URL, note, status), action links for automation
 - **Interactive topic map** – every entry positioned by semantic similarity on a zoomable 2D map (t-SNE), with category colors, date filters, hover previews, and semantic search
+- **RAG search API** – `GET/POST /api/search` returns the most relevant entries (title + summary + score) for a natural-language query, ready for AI tool calls
 - **SQLite** – Local storage, no database server needed
 - **Dark/Light mode** – Switchable theme, respects system preference
 

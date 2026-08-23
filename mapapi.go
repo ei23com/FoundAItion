@@ -620,6 +620,223 @@ func (a *App) handleMapRegions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ─── Unified search endpoint (AI tool calls) ─────────────────────────────────
+//
+// GET/POST /api/search
+//   POST body: {"query":"...", "limit":5, "mode":"semantic"|"text",
+//               "date_from":"YYYY-MM-DD", "date_to":"YYYY-MM-DD",
+//               "with_content":false}
+//   GET query:  ?q=...&limit=5&mode=semantic&date_from=...&date_to=...
+//
+// Returns the most relevant entries with title/summary/url so an LLM can
+// consume them directly (RAG-style retrieval).
+
+type searchRequest struct {
+	Query       string
+	Limit       int
+	Mode        string
+	DateFrom    string
+	DateTo      string
+	WithContent bool
+}
+
+type searchResult struct {
+	ID        int64   `json:"id"`
+	Score     float64 `json:"score,omitempty"`
+	Timestamp string  `json:"timestamp,omitempty"`
+	URL       string  `json:"url,omitempty"`
+	Title     string  `json:"title"`
+	Summary   string  `json:"summary,omitempty"`
+	Category  string  `json:"category,omitempty"`
+	Note      string  `json:"note,omitempty"`
+	Content   string  `json:"content,omitempty"`
+}
+
+type searchResponse struct {
+	Query   string         `json:"query"`
+	Mode    string         `json:"mode"`
+	Count   int            `json:"count"`
+	Results []searchResult `json:"results"`
+}
+
+func jsonSearchError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+func (a *App) handleSearch(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		jsonSearchError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	req := searchRequest{Limit: 5, Mode: "semantic"}
+	if r.Method == http.MethodPost {
+		var b struct {
+			Query       string `json:"query"`
+			Limit       int    `json:"limit"`
+			Mode        string `json:"mode"`
+			DateFrom    string `json:"date_from"`
+			DateTo      string `json:"date_to"`
+			WithContent bool   `json:"with_content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			jsonSearchError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			return
+		}
+		req.Query, req.Limit, req.Mode = b.Query, b.Limit, b.Mode
+		req.DateFrom, req.DateTo, req.WithContent = b.DateFrom, b.DateTo, b.WithContent
+	} else {
+		qp := r.URL.Query()
+		req.Query = qp.Get("q")
+		req.Limit, _ = strconv.Atoi(qp.Get("limit"))
+		req.Mode = qp.Get("mode")
+		req.DateFrom, req.DateTo = qp.Get("date_from"), qp.Get("date_to")
+		req.WithContent = qp.Get("with_content") == "true"
+	}
+
+	req.Query = strings.TrimSpace(req.Query)
+	if req.Query == "" {
+		jsonSearchError(w, http.StatusBadRequest, "missing query")
+		return
+	}
+	if req.Limit <= 0 {
+		req.Limit = 5
+	}
+	if req.Limit > 25 {
+		req.Limit = 25
+	}
+	if req.Mode != "text" {
+		req.Mode = "semantic"
+	}
+
+	var (
+		results []searchResult
+		err     error
+	)
+	if req.Mode == "semantic" {
+		results, err = a.runSemanticSearch(req)
+	} else {
+		results, err = a.runTextSearch(req)
+	}
+	if err != nil {
+		jsonSearchError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	json.NewEncoder(w).Encode(searchResponse{
+		Query:   req.Query,
+		Mode:    req.Mode,
+		Count:   len(results),
+		Results: results,
+	})
+}
+
+// runSemanticSearch embeds the query and ranks every entry by cosine
+// similarity; date filters are applied while walking the ranking.
+func (a *App) runSemanticSearch(req searchRequest) ([]searchResult, error) {
+	model := a.cfg.ActiveEmbeddingModel()
+
+	a.llmMu.Lock()
+	vec, err := a.embedText(req.Query)
+	a.llmMu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("embedding fehlgeschlagen: %v", err)
+	}
+
+	stats, err := a.loadAllVectors(model)
+	if err != nil {
+		return nil, fmt.Errorf("vektoren nicht geladen: %v", err)
+	}
+
+	type scored struct {
+		id    int64
+		score float64
+	}
+	hits := make([]scored, 0, len(stats.Vectors))
+	for id, v := range stats.Vectors {
+		hits = append(hits, scored{id: id, score: cosineF32(vec, v)})
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
+
+	results := make([]searchResult, 0, req.Limit)
+	for _, h := range hits {
+		if len(results) >= req.Limit {
+			break
+		}
+		l, err := a.fetchLinkByID(h.id, req.WithContent)
+		if err != nil {
+			continue
+		}
+		tsDate := ""
+		if len(l.Timestamp) >= 10 {
+			tsDate = l.Timestamp[:10]
+		}
+		if req.DateFrom != "" && tsDate != "" && tsDate < req.DateFrom {
+			continue
+		}
+		if req.DateTo != "" && tsDate != "" && tsDate > req.DateTo {
+			continue
+		}
+		res := searchResult{
+			ID:        l.ID,
+			Score:     h.score,
+			Timestamp: normalizeTimestamp(l.Timestamp),
+			URL:       l.URL,
+			Title:     l.Title,
+			Summary:   l.Summary,
+			Category:  l.Category,
+			Note:      l.Note,
+		}
+		if req.WithContent {
+			res.Content = l.Content
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
+// runTextSearch performs classic LIKE matching over title/url/summary/note.
+func (a *App) runTextSearch(req searchRequest) ([]searchResult, error) {
+	pattern := "%" + req.Query + "%"
+	cols := `"id", "timestamp", "url", "title", "summary", "category", "note"`
+	if req.WithContent {
+		cols += `, "content"`
+	}
+	query := fmt.Sprintf(`SELECT %s FROM %s
+		WHERE ("title" LIKE ? OR "url" LIKE ? OR "summary" LIKE ? OR "note" LIKE ? OR "category" LIKE ?)
+		ORDER BY "id" DESC LIMIT ?`, cols, TableName)
+
+	args := []any{pattern, pattern, pattern, pattern, pattern, req.Limit}
+	rows, err := a.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("datenbank: %v", err)
+	}
+
+	results := make([]searchResult, 0, req.Limit)
+	var content sql.NullString
+	for rows.Next() {
+		var res searchResult
+		var ts string
+		var dest []any = []any{&res.ID, &ts, &res.URL, &res.Title, &res.Summary, &res.Category, &res.Note}
+		if req.WithContent {
+			dest = append(dest, &content)
+		}
+		if err := rows.Scan(dest...); err != nil {
+			continue
+		}
+		res.Timestamp = normalizeTimestamp(ts)
+		if req.WithContent {
+			res.Content = content.String
+		}
+		results = append(results, res)
+	}
+	rows.Close()
+	return results, rows.Err()
+}
+
 // normalizeTimestamp converts stored timestamps to RFC3339.
 func normalizeTimestamp(ts string) string {
 	if ts == "" {

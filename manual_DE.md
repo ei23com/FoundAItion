@@ -210,6 +210,7 @@ Jeder Eintrag wird per Embedding-Vektor auf einer interaktiven 2D-Karte position
 | POST | `/api/map/embeddings` | Startet Embedding+Projektion im Hintergrund (`?force=true` = alle Vektoren neu) – gibt sofort `202` zurück |
 | GET | `/api/map/status` | Fortschritt des Karten-Jobs (`job.phase`, `job.done`, `job.total`, `job.pct`) |
 | POST | `/api/map/query` | Semantische Suche über die Kartenvektoren (`{"query":"..."}` → Top-300 mit Kosinus-Scores) |
+| GET/POST | `/api/search` | **RAG-Suche für KI-Tools:** `?q=...&limit=5&mode=semantic\|text[&date_from=&date_to=&with_content=true]` – POST mit JSON-Body `{"query","limit","mode","date_from","date_to","with_content"}`. Liefert Titel/Zusammenfassung/URL/Score der besten Treffer |
 
 ---
 

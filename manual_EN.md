@@ -210,6 +210,7 @@ Every entry is positioned on an interactive 2D map by its embedding vector – s
 | POST | `/api/map/embeddings` | Start background embedding+projection (`?force=true` = recompute all vectors) – returns `202` immediately |
 | GET | `/api/map/status` | Progress of the map job (`job.phase`, `job.done`, `job.total`, `job.pct`) |
 | POST | `/api/map/query` | Semantic search over the map vectors (`{"query":"..."}` → top 300 with cosine scores) |
+| GET/POST | `/api/search` | **RAG search for AI tools:** `?q=...&limit=5&mode=semantic\|text[&date_from=&date_to=&with_content=true]` – POST JSON `{"query","limit","mode","date_from","date_to","with_content"}`. Returns title/summary/url/score of the best matches |
 
 ---
 
