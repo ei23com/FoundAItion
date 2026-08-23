@@ -2777,18 +2777,21 @@ function buildMapLegend() {
         const key = p.category || '';
         counts.set(key, (counts.get(key) || 0) + 1);
     }
+    // Reihenfolge: bekannte Kategorien zuerst, dann der Rest. Die Anzahl wird
+    // gemerkt, BEVOR der Eintrag aus der Map entfernt wird (sonst zeigt jedes
+    // Chip 0).
     const ordered = [];
     for (const c of (Array.isArray(categories) ? categories : [])) {
-        if (counts.has(c.name)) { ordered.push(c.name); counts.delete(c.name); }
+        if (counts.has(c.name)) { ordered.push([c.name, counts.get(c.name)]); counts.delete(c.name); }
     }
-    for (const k of counts.keys()) ordered.push(k);
+    for (const [k, v] of counts) ordered.push([k, v]);
 
-    el.innerHTML = ordered.map(name => {
+    el.innerHTML = ordered.map(([name, count]) => {
         const col = name ? mapColorOf({ category: name }) : '#9ca3af';
         const label = esc(name || __('map_uncategorized'));
         const hidden = name && mapState.hiddenCats.has(name) ? 'hidden-cat' : '';
         return `<span class="map-legend-chip ${hidden}" data-cat="${escAttr(name)}">
-            <span class="map-legend-dot" style="background:${col};"></span>${label} (${counts.get(name) || 0})</span>`;
+            <span class="map-legend-dot" style="background:${col};"></span>${label} (${count})</span>`;
     }).join('');
 
     el.querySelectorAll('.map-legend-chip').forEach(chip => {
