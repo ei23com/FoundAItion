@@ -1579,10 +1579,11 @@
         .map-semantic-toggle input { accent-color:#60a5fa; cursor:pointer; }
         .map-stats-line { font-size:0.75rem; color:var(--text-secondary); display:flex; flex-wrap:wrap; gap:0.3rem 0.9rem; align-items:center; }
         .map-canvas-wrap {
-            position:relative; height:calc(100vh - 240px); min-height:420px;
+            position:relative; /* Höhe setzt sizeMapShell() dynamisch */
             background:var(--bg-secondary); border:1px solid var(--border);
             border-radius:12px; overflow:hidden; cursor:grab;
         }
+        body.map-view #ghFooter { display:none; }
         .map-canvas-wrap.panning { cursor:grabbing; }
         #mapCanvas {
             position:absolute; inset:0; width:100%; height:100%; display:block;
@@ -1762,7 +1763,7 @@
 <div class="toast" id="toast"></div>
 
 <!-- ── Subtle GitHub Footer ──────────────────────── -->
-<div style="padding: 0.75rem 2rem 1.5rem; text-align: center; font-size: 0.75rem; color: var(--text-muted); opacity: 0.45;">
+<div id="ghFooter" style="padding: 0.75rem 2rem 1.5rem; text-align: center; font-size: 0.75rem; color: var(--text-muted); opacity: 0.45;">
     <a href="https://github.com/ei23com/FoundAItion" target="_blank" rel="noopener noreferrer"
        style="color: inherit; text-decoration: none; transition: opacity 0.15s;"
        onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity=''">
@@ -2106,6 +2107,7 @@ async function checkRoute() {
 }
 
 window.addEventListener('hashchange', checkRoute);
+window.addEventListener('resize', () => { if (currentView === 'map') sizeMapShell(); });
 
 // ── Load data ─────────────────────────────────────────────
 async function load() {
@@ -2163,6 +2165,7 @@ async function load() {
 // ── Navigate to list ─────────────────────────────────────
 function showList() {
     currentView = 'list';
+    document.body.classList.remove('map-view');
     location.hash = '';
     searchRow.style.display = 'flex';
     searchInput.placeholder = __('search_placeholder');
@@ -2175,6 +2178,7 @@ function showList() {
 // ── Navigate to detail ────────────────────────────────────
 async function showDetail(id) {
     currentView = 'detail';
+    document.body.classList.remove('map-view');
     searchRow.style.display = 'none';
     stopMapPoll();
     mapWindowStopPlay();
@@ -2255,6 +2259,7 @@ function mapS2W(x, y) { return [(x - mapState.tx) / mapState.scale, (y - mapStat
 
 async function showMap() {
     currentView = 'map';
+    document.body.classList.add('map-view');
     window.__cameFromMap = false;
     // Die Suchzeile bleibt sichtbar – sie steuert jetzt beide Ansichten.
     searchRow.style.display = 'flex';
@@ -2353,6 +2358,7 @@ function renderMapShell() {
     if (mapState.ro) mapState.ro.disconnect();
     mapState.ro = new ResizeObserver(() => resizeMapCanvas());
     mapState.ro.observe(mapState.wrapEl);
+    sizeMapShell();
     resizeMapCanvas();
 
     if (mapWindowDays) updateMwLabel(); // Zustand nach View-Wechsel wiederherstellen
@@ -2376,6 +2382,7 @@ async function loadMapData() {
         renderRegionsList();
         updateMapStatsLine();
         buildMapLegend();
+        sizeMapShell();
         applyMapFilters();
         fitMapView(true);
         requestMapDraw();
@@ -2690,6 +2697,7 @@ function renderRegionsList() {
             else deleteRegion(rg);
         });
     });
+    sizeMapShell();
 }
 
 function updateMwLabel() {
@@ -2861,6 +2869,14 @@ function buildMapLegend() {
 }
 
 // ── Canvas: size, transform, drawing ───────────────────────
+function sizeMapShell() {
+    const wrap = mapState.wrapEl;
+    if (!wrap || !wrap.isConnected) return;
+    const top = wrap.getBoundingClientRect().top;
+    const avail = window.innerHeight - top - 10;
+    wrap.style.height = Math.max(240, Math.floor(avail)) + 'px';
+}
+
 function resizeMapCanvas() {
     const c = mapState.canvas, wrap = mapState.wrapEl;
     if (!c || !wrap) return;
