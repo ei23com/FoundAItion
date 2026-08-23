@@ -2967,6 +2967,38 @@ function drawMapFrame() {
     }
     ctx.globalAlpha = 1;
 
+    // Auto-Labels bei starker Vergrößerung (Mobile-Äquivalent zum Hover)
+    const labelT0 = mapState.fitScale * 4, labelT1 = mapState.fitScale * 6;
+    if (!mapState.draw && mapState.scale > labelT0 && pts.length > 0) {
+        const labelAlpha = Math.min(1, (mapState.scale - labelT0) / (labelT1 - labelT0));
+        const txtColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#eee';
+        const candidates = [];
+        for (const i of mapState.visible) {
+            const p = pts[i];
+            const sx = p.x * mapState.scale + mapState.tx;
+            const sy = p.y * mapState.scale + mapState.ty;
+            if (sx < 10 || sy < 24 || sx > w - 10 || sy > h - 6) continue;
+            if (!p.title) continue;
+            candidates.push({ sx, sy, title: p.title, dim: hasSearch ? !mapState.scores.has(p.id) : false });
+        }
+        // Zu viele Labels? Gleichmäßig ausdünnen.
+        const maxLabels = 50;
+        const stride = candidates.length > maxLabels ? Math.ceil(candidates.length / maxLabels) : 1;
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.textBaseline = 'alphabetic';
+        for (let k = 0; k < candidates.length; k += stride) {
+            const cand = candidates[k];
+            ctx.globalAlpha = labelAlpha * (cand.dim ? 0.35 : 0.92);
+            const text = cand.title.length > 30 ? cand.title.slice(0, 29) + '…' : cand.title;
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = bg;
+            ctx.strokeText(text, cand.sx + 7, cand.sy - 6);
+            ctx.fillStyle = txtColor;
+            ctx.fillText(text, cand.sx + 7, cand.sy - 6);
+        }
+        ctx.globalAlpha = 1;
+    }
+
     // Zeichenvorschau über den Punkten
     if (mapState.draw && mapState.draw.pts.length > 0) {
         drawRegionShape(ctx, mapState.draw.pts, '#a78bfa', true);
@@ -3034,7 +3066,18 @@ function setupMapCanvasEvents() {
         c.setPointerCapture(e.pointerId);
         mapState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         mapState.dragMoved = false;
+        if (mapState.pointers.size === 1) {
+            // Long-Press zeigt den Tooltip (Mobile-Äquivalent zum Hover)
+            mapState.pressStartXY = { x: e.clientX, y: e.clientY };
+            clearTimeout(mapState.pressTimer);
+            mapState.pressTimer = setTimeout(() => {
+                mapState.pressFired = true;
+                const rect = c.getBoundingClientRect();
+                mapHoverAtPoint(e.clientX - rect.left, e.clientY - rect.top);
+            }, 500);
+        }
         if (mapState.pointers.size === 2) {
+            mapWindowStopPress();
             const ptsArr = [...mapState.pointers.values()];
             mapState.pinchDist = Math.hypot(ptsArr[0].x - ptsArr[1].x, ptsArr[0].y - ptsArr[1].y);
         }
@@ -3047,6 +3090,9 @@ function setupMapCanvasEvents() {
             mapState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
             if (mapState.pointers.size === 1) {
+                if (!mapState.dragMoved && Math.hypot(e.clientX - (mapState.pressStartXY ? mapState.pressStartXY.x : 0), e.clientY - (mapState.pressStartXY ? mapState.pressStartXY.y : 0)) > 10) {
+                    mapWindowStopPress();
+                }
                 if (Math.abs(dx) + Math.abs(dy) > 0) {
                     if (!mapState.dragMoved && Math.abs(dx) + Math.abs(dy) > 2) mapState.dragMoved = true;
                     if (mapState.dragMoved) {
@@ -3102,7 +3148,9 @@ function setupMapCanvasEvents() {
     function endPointer(e) {
         const had = mapState.pointers.delete(e.pointerId);
         wrap.classList.remove('panning');
-        if (had && !mapState.dragMoved && mapState.pointers.size === 0) {
+        const pressed = mapState.pressFired;
+        mapWindowStopPress();
+        if (had && !mapState.dragMoved && !pressed && mapState.pointers.size === 0) {
             // treat as tap/click
             updateMapHover(e);
             if (mapState.hoverIdx >= 0) {
@@ -3118,11 +3166,56 @@ function setupMapCanvasEvents() {
     c.addEventListener('pointerleave', () => { hideMapTooltip(); });
 }
 
+function mapWindowStopPress() {
+    clearTimeout(mapState.pressTimer);
+    mapState.pressTimer = null;
+    mapState.pressFired = false;
+}
+
+// mapHoverAtPoint zeigt den Tooltip für den nächsten Punkt (Screen-Koordinaten).
+function mapHoverAtPoint(mx, my) {
+    let best = -1, bestD = 13 * 13;
+    for (const i of mapState.visible) {
+        const p = mapState.points[i];
+        const sx = p.x * mapState.scale + mapState.tx;
+        const sy = p.y * mapState.scale + mapState.ty;
+        const d = (sx - mx) * (sx - mx) + (sy - my) * (sy - my);
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) return false;
+    mapState.hoverIdx = best;
+    requestMapDraw();
+    showMapTooltipFor(best);
+    return true;
+}
+
+function showMapTooltipFor(idx) {
+    const p = mapState.points[idx];
+    const tt = mapState.tooltipEl;
+    if (!tt || !p) return;
+    const metaBits = [];
+    if (p.category) metaBits.push(`<span style="color:${mapColorOf(p)};">●</span> ${esc(p.category)}`);
+    if (p.timestamp) metaBits.push(formatDate(p.timestamp));
+    tt.innerHTML = `<div class="tt-title">${esc(p.title || '(ohne Titel)')}</div>` +
+        (metaBits.length ? `<div class="tt-meta">${metaBits.join(' · ')}</div>` : '') +
+        `<div class="tt-hint">${__('map_click_open')}</div>`;
+    tt.classList.add('show');
+    const twrap = mapState.wrapEl;
+    const sx = p.x * mapState.scale + mapState.tx;
+    const sy = p.y * mapState.scale + mapState.ty;
+    let tx = sx + 14, ty = sy + 14;
+    if (tx + 330 > twrap.clientWidth) tx = sx - 330;
+    if (ty + 90 > twrap.clientHeight) ty = sy - 90;
+    tt.style.left = Math.max(4, tx) + 'px';
+    tt.style.top = Math.max(4, ty) + 'px';
+}
+
 function updateMapHover(e) {
     const c = mapState.canvas;
     if (!c) return;
     const rect = c.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
     let best = -1, bestD = 13 * 13;
     for (const i of mapState.visible) {
         const p = mapState.points[i];
@@ -3136,21 +3229,7 @@ function updateMapHover(e) {
         requestMapDraw();
     }
     if (best >= 0) {
-        const p = mapState.points[best];
-        const tt = mapState.tooltipEl;
-        const metaBits = [];
-        if (p.category) metaBits.push(`<span style="color:${mapColorOf(p)};">●</span> ${esc(p.category)}`);
-        if (p.timestamp) metaBits.push(formatDate(p.timestamp));
-        tt.innerHTML = `<div class="tt-title">${esc(p.title || '(ohne Titel)')}</div>` +
-            (metaBits.length ? `<div class="tt-meta">${metaBits.join(' · ')}</div>` : '') +
-            `<div class="tt-hint">${__('map_click_open')}</div>`;
-        tt.classList.add('show');
-        const twrap = mapState.wrapEl;
-        let tx = mx + 14, ty = my + 14;
-        if (tx + 330 > twrap.clientWidth) tx = mx - 330;
-        if (ty + 90 > twrap.clientHeight) ty = my - 90;
-        tt.style.left = Math.max(4, tx) + 'px';
-        tt.style.top = Math.max(4, ty) + 'px';
+        showMapTooltipFor(best);
     } else {
         hideMapTooltip();
     }
