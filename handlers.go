@@ -82,6 +82,32 @@ func (a *App) handleAPI(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
+	case "/api/map":
+		if r.Method == http.MethodGet {
+			a.getMap(w, r)
+		} else {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	case "/api/map/embeddings":
+		if r.Method == http.MethodPost {
+			a.postMapEmbeddings(w, r)
+		} else {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	case "/api/map/status":
+		if r.Method == http.MethodGet {
+			a.getMapStatus(w, r)
+		} else {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	case "/api/map/query":
+		if r.Method == http.MethodPost {
+			a.postMapQuery(w, r)
+		} else {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	case "/api/map/regions":
+		a.handleMapRegions(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -121,6 +147,14 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 
 	catFilter := r.URL.Query().Get("category")
 	q := r.URL.Query().Get("q")
+
+	// ── Semantic search (RAG-style) ─────────────────────────────────────────
+	// ?q=...&semantic=true ranks all entries by embedding cosine similarity.
+	if r.URL.Query().Get("semantic") == "true" && strings.TrimSpace(q) != "" {
+		a.semanticLinks(w, r, q)
+		return
+	}
+
 	urlLike := r.URL.Query().Get("url_like")
 	noteFilter := r.URL.Query().Get("note")
 	includeFilter := r.URL.Query().Get("included")
@@ -160,6 +194,15 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 		pattern := "%" + noteFilter + "%"
 		whereClauses = append(whereClauses, `"note" LIKE ?`)
 		args = append(args, pattern)
+	}
+	if dateFrom := r.URL.Query().Get("date_from"); dateFrom != "" {
+		// Timestamps sind "YYYY-MM-DD HH:MM:SS" → Datumspräfixvergleich genügt.
+		whereClauses = append(whereClauses, `substr("timestamp",1,10) >= ?`)
+		args = append(args, dateFrom)
+	}
+	if dateTo := r.URL.Query().Get("date_to"); dateTo != "" {
+		whereClauses = append(whereClauses, `substr("timestamp",1,10) <= ?`)
+		args = append(args, dateTo)
 	}
 
 	whereSQL := ""
@@ -299,6 +342,11 @@ func (a *App) updateLink(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ERROR: update link %d: %v", id, err)
 		http.Error(w, "update failed", http.StatusInternalServerError)
 		return
+	}
+
+	// title/summary changed → vector must follow (hash mode re-embeds, API mode clears)
+	if r.URL.Query().Get("title") != "" || r.URL.Query().Get("clear_summary") == "true" {
+		a.afterTextChange(id)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -564,6 +612,7 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 				log.Printf("[auto-summary] id=%d update error: %v", linkID, err)
 			} else {
 				log.Printf("[auto-summary] id=%d summarized (%d chars)", linkID, len(summary))
+				a.afterTextChange(linkID)
 			}
 		}(id, content)
 	}
@@ -688,20 +737,47 @@ func (a *App) processEntries(w http.ResponseWriter, r *http.Request) {
 	phase2Stats := a.processPhase2Summarize(pending, &a.progress)
 
 	allErrors := append(phase1Errs, phase2Stats.Errors...)
+
+	// ── Auto-categorization ─────────────────────────────────────────────────
+	// Newly summarized entries are categorized right away so the user no
+	// longer has to trigger it manually.
+	categorized := 0
+	if phase2Stats.Processed > 0 && a.cfg.OpenAIKey != "" {
+		a.progress.mu.Lock()
+		a.progress.Phase = 2
+		a.progress.Message = "Auto-Kategorisierung…"
+		a.progress.mu.Unlock()
+		log.Printf("[process] auto-categorizing after %d new summaries", phase2Stats.Processed)
+		uncategorized, err := a.loadUncategorizedLinks()
+		if err != nil {
+			log.Printf("[process] auto-categorize query error: %v", err)
+			allErrors = append(allErrors, fmt.Sprintf("[auto-categorize] query: %v", err))
+		} else if len(uncategorized) > 0 {
+			catStats := a.categorizeLinks(uncategorized)
+			categorized = catStats.Processed
+			allErrors = append(allErrors, catStats.Errors...)
+		}
+	}
+
 	duration := time.Since(startTime).Round(time.Millisecond)
 
 	a.progress.mu.Lock()
 	a.progress.Status = "done"
 	a.progress.Phase = 0
-	a.progress.Message = fmt.Sprintf("Done: %d created, %d skipped, %d errors", phase2Stats.Processed, phase2Stats.Skipped, len(allErrors))
+	msg := fmt.Sprintf("Done: %d created, %d skipped, %d errors", phase2Stats.Processed, phase2Stats.Skipped, len(allErrors))
+	if categorized > 0 {
+		msg += fmt.Sprintf(", %d categorized", categorized)
+	}
+	a.progress.Message = msg
 	a.progress.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ProcessResponse{
-		Processed: phase2Stats.Processed,
-		Skipped:   phase2Stats.Skipped,
-		Errors:    allErrors,
-		Duration:  duration.String(),
+		Processed:   phase2Stats.Processed,
+		Skipped:     phase2Stats.Skipped,
+		Errors:      allErrors,
+		Duration:    duration.String(),
+		Categorized: categorized,
 	})
 }
 
@@ -914,6 +990,7 @@ func (a *App) processPhase2Summarize(pending []Link, prog *ProcessingState) phas
 		} else {
 			stats.Processed++
 			log.Printf("[phase2] id=%d summarized (%d chars)", link.ID, len(summary))
+			a.afterTextChange(link.ID)
 		}
 	}
 
@@ -1143,31 +1220,13 @@ func (a *App) categorizeEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lang := a.cfg.UILanguage
-
 	// Select entries that have a summary but no category
-	query := fmt.Sprintf(`
-		SELECT "id", "timestamp", "url", "title", "summary", "content", "category", "note", "included", "marked", "read"
-		FROM %s
-		WHERE ("category" IS NULL OR "category" = '')
-		AND ("summary" IS NOT NULL AND "summary" != '' AND "summary" != 'zu langer Text')
-		ORDER BY "id" DESC`, TableName)
-
-	rows, err := a.db.Query(query)
+	pending, err := a.loadUncategorizedLinks()
 	if err != nil {
 		log.Printf("[categorize] query error: %v", err)
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
 	}
-
-	var pending []Link
-	for rows.Next() {
-		l, err := scanLink(rows)
-		if err == nil {
-			pending = append(pending, *l)
-		}
-	}
-	rows.Close()
 
 	if len(pending) == 0 {
 		w.Header().Set("Content-Type", "application/json")
@@ -1178,6 +1237,44 @@ func (a *App) categorizeEntries(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	stats := a.categorizeLinks(pending)
+	stats.Duration = time.Since(startTime).Round(time.Millisecond).String()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
+
+// loadUncategorizedLinks returns entries that have a summary but no category.
+func (a *App) loadUncategorizedLinks() ([]Link, error) {
+	query := fmt.Sprintf(`
+		SELECT "id", "timestamp", "url", "title", "summary", "content", "category", "note", "included", "marked", "read"
+		FROM %s
+		WHERE ("category" IS NULL OR "category" = '')
+		AND ("summary" IS NOT NULL AND "summary" != '' AND "summary" != 'zu langer Text')
+		ORDER BY "id" DESC`, TableName)
+
+	rows, err := a.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pending []Link
+	for rows.Next() {
+		l, err := scanLink(rows)
+		if err == nil {
+			pending = append(pending, *l)
+		}
+	}
+	return pending, rows.Err()
+}
+
+// categorizeLinks assigns a category to every entry in pending using the
+// configured categorize model. Shared by the manual endpoint and the
+// automatic run after the summarize phase.
+func (a *App) categorizeLinks(pending []Link) ProcessResponse {
+	lang := a.cfg.UILanguage
 
 	log.Printf("[categorize] %d entries without category", len(pending))
 
@@ -1235,14 +1332,9 @@ func (a *App) categorizeEntries(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	duration := time.Since(startTime).Round(time.Millisecond)
-	stats.Duration = duration.String()
-
 	log.Printf("[categorize] Done – %d categorized, %d skipped, %d errors",
 		stats.Processed, stats.Skipped, len(stats.Errors))
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	return stats
 }
 
 // ─── RSS Feed – GET /rss ─────────────────────────────────────────────────────
@@ -1305,6 +1397,9 @@ func (a *App) handleRSS(w http.ResponseWriter, r *http.Request) {
 		whereClauses = append(whereClauses, `"note" LIKE ?`)
 		args = append(args, pattern)
 	}
+
+	// Nur Einträge mit Zusammenfassung in den RSS-Feed
+	whereClauses = append(whereClauses, `"summary" IS NOT NULL AND "summary" != ''`)
 
 	whereSQL := ""
 	if len(whereClauses) > 0 {
@@ -1494,6 +1589,7 @@ func (a *App) handleFeedAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "update failed", http.StatusInternalServerError)
 			return
 		}
+		a.afterTextChange(id) // summary cleared → vector stale
 		rows, _ := res.RowsAffected()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
