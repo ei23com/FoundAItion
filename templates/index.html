@@ -2286,12 +2286,6 @@ function updateViewToggle() {
 function renderMapShell() {
     appEl.innerHTML = `
         <div class="map-shell">
-            <div class="stats">
-                <span><strong>${__('map_title')}</strong></span>
-                <span class="map-stats-line" id="mapStatsLine"></span>
-                <button class="map-legend-chip" id="mapFocusBtn" style="display:none;">🎯 ${__('map_focus_hits')}</button>
-                <span style="color:var(--text-muted);">${__('map_hint')}</span>
-            </div>
             <div class="map-toolbar">
                 <span class="hdr-date-label">${__('mw_window')}</span>
                 <select id="mwSize" class="category-select" style="width:auto;padding:0.28rem 0.5rem;font-size:0.78rem;">
@@ -2303,6 +2297,8 @@ function renderMapShell() {
                 <button class="btn-icon" id="mwNext" title="${__('mw_newer')}">▶</button>
                 <span class="map-stats-line" id="mwLabel"></span>
                 <span style="flex:1;"></span>
+                <span class="map-stats-line" id="mwHits"></span>
+                <button class="map-legend-chip" id="mapFocusBtn" style="display:none;">🎯 ${__('map_focus_hits')}</button>
                 <button class="btn-icon header-btn-map" id="mwDraw" title="${__('rg_draw')}">✏️</button>
             </div>
             <div class="map-legend" id="mapLegend"></div>
@@ -2363,12 +2359,10 @@ function renderMapShell() {
 }
 
 function updateMapStatsLine() {
-    const el = document.getElementById('mapStatsLine');
+    const el = document.getElementById('mwHits');
     if (!el) return;
-    const c = mapState.counts;
-    el.innerHTML = `<span>${c.embedded} ${__('map_points')}</span>` +
-        (c.missing > 0 ? `<span style="color:var(--text-muted);">${c.missing} ${__('map_missing_vecs')}</span>` : '') +
-        (mapState.hitsInfo ? `<span style="color:#60a5fa;">${mapState.hitsInfo}</span>` : '');
+    el.innerHTML = mapState.hitsInfo
+        ? `<span style="color:#60a5fa;">${mapState.hitsInfo}</span>` : '';
 }
 
 async function loadMapData() {
