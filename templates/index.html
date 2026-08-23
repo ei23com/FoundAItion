@@ -2988,13 +2988,19 @@ function drawMapFrame() {
         let drawn = 0;
         for (const i of mapState.visible) {
             if (drawn >= 50) break;
-            if (i % stride !== 0) continue;
             const p = pts[i];
             if (!p.title) continue;
             const sx = p.x * mapState.scale + mapState.tx;
             const sy = p.y * mapState.scale + mapState.ty;
             if (sx < 10 || sy < 24 || sx > w - 10 || sy > h - 6) continue;
-            if (hasSearch && !mapState.scores.has(p.id)) continue;
+
+            // Nur AKTIVE Punkte beschriften – abgedimmte (Suche/Zeitfenster)
+            // bleiben ohne Label. Bei aktiver Suche/Zeitfenster entfällt die
+            // Ausdünnung, da dort ohnehin wenige Punkte relevant sind.
+            const sHit = !hasSearch || mapState.scores.has(p.id);
+            const wHit = !hasWindow || mapState.windowSet.has(p.id);
+            if (!sHit || !wHit) continue;
+            if (!hasSearch && !hasWindow && i % stride !== 0) continue;
             drawn++;
             ctx.globalAlpha = 0.92;
             const text = p.title.length > 30 ? p.title.slice(0, 29) + '…' : p.title;
