@@ -4120,6 +4120,7 @@ const sectionLabels = {
     database: '🗄️ Database',
     general: '⚙️ General',
     categorize: '🏷️ Categorization',
+    vectormap: '🗺️ Vectormap / Embeddings',
     rss: '📡 RSS Feed',
     tools: '🛠️ Tools'
 };
@@ -4158,7 +4159,7 @@ function renderConfig(data) {
     }
 
     let html = '';
-    const sectionOrder = ['openai', 'whisper', 'youtube', 'database', 'general', 'categorize', 'rss', 'tools']; 
+    const sectionOrder = ['openai', 'whisper', 'youtube', 'database', 'general', 'categorize', 'vectormap', 'rss', 'tools'];
     for (const sec of sectionOrder) {
         if (!groups[sec]) continue;
         html += '<div class="config-section">';
