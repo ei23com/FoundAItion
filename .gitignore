@@ -3,3 +3,6 @@ foundaition
 foundaition.db
 yt-dlp-plugins/srt_fix/yt_dlp_plugins/postprocessor/srt_fix.py
 yt-dlp_linux
+foundaition.db-*
+foundaition.db.*
+server.log
