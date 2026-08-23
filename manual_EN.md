@@ -65,7 +65,7 @@ Articles, videos, or entire playlists land in FoundAItion with a single tap and 
 
 The `links` table is **auto-created** on first run (`CREATE TABLE IF NOT EXISTS`).
 
-### Schema (15 columns)
+### Schema (17 columns)
 
 | Column | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -80,6 +80,11 @@ The `links` table is **auto-created** on first run (`CREATE TABLE IF NOT EXISTS`
 | `included` | INTEGER | `0` | Include in export/view |
 | `marked` | INTEGER | `0` | Marked flag |
 | `read` | INTEGER | `0` | Read/Unread flag |
+| `vector` | BLOB | NULL | Embedding vector (little-endian float32) used by the topic map |
+| `vec_model` | TEXT | NULL | Name of the model that produced the vector – switching models invalidates old vectors automatically |
+
+FoundAItion also maintains the **`map_positions`** table (`id`, `x`, `y`, `model`, `fingerprint`) holding the 2D coordinates of the topic map. The `fingerprint` hashes all vector IDs + model name: when entries change, the map is recomputed on next open, otherwise it loads instantly from cache.
+
 ---
 
 ## Quick Start
@@ -132,6 +137,23 @@ Open `http://localhost:8080` in your browser. Change port via `LISTEN_PORT=9000`
 - Prompt templates are loaded in the matching language
 - Setting is saved to `.env` (`UI_LANGUAGE=de` / `UI_LANGUAGE=en`)
 
+### Topic map (`#map`, 🗺️ button)
+
+Every entry is positioned on an interactive 2D map by its embedding vector – semantically similar articles sit close together (Barnes-Hut t-SNE implemented in pure Go, deterministic).
+
+**Usage:**
+- **Scroll / pinch** = zoom, **drag** = pan
+- **Hover** shows title, category and date; **click** opens the article
+- **Category legend**: click a chip to hide/show that category
+- **Date filters**: "From"/"To" restrict the visible time range
+- **Shared search bar at the top** (drives list and map): title substring filter; with the **✨ button** active it searches embedding vectors semantically (top hits render larger, 🎯 zooms to them); date filters "From/To" sit next to it
+
+**Embeddings:**
+- Without a configured model, a local hash embedder runs (offline, instant, lexical quality only)
+- With `EMBEDDING_BASE_URL` + `EMBEDDING_MODEL` set (e.g. llama.cpp serving a Qwen3-Embedding GGUF), real semantic vectors are produced. The backfill never starts implicitly – the map overlay shows an **"Embed now"** button, or call `POST /api/map/embeddings`
+- Progress is shown as an overlay; the map reloads automatically afterwards
+- 2D positions are cached in the `map_positions` table → restarts are instant
+
 ---
 
 ## Environment Variables
@@ -155,6 +177,9 @@ Open `http://localhost:8080` in your browser. Change port via `LISTEN_PORT=9000`
 | `RSS_BASE_URL` | *(empty)* | Base URL for feed links (e.g. behind reverse proxy). Empty = auto-detected from request host. |
 | `RSS_ITEM_COUNT` | `30` | Max entries in Atom feed |
 | `RSS_EXTRA_ACTION_LINK` | *(empty)* | Comma-separated list: `[Name](url)` – `{id}` is replaced (e.g. `[Publish](http://10.1.1.11:1880/publish?id={id}),[Mark read](http://10.1.1.11:1880/read?id={id})`) |
+| `EMBEDDING_BASE_URL` | *(empty)* | OpenAI-compatible `/embeddings` endpoint for the topic map. Empty = local hash embedder (offline) |
+| `EMBEDDING_MODEL` | *(empty)* | Model name for embeddings (e.g. `Qwen3-Embedding-4B-GGUF`). Switching invalidates old vectors |
+| `EMBEDDING_API_KEY` | *(empty)* | API key for the embedding endpoint (not needed for llama.cpp). Falls back to `OPENAI_API_KEY` |
 
 ---
 
@@ -164,12 +189,13 @@ Open `http://localhost:8080` in your browser. Change port via `LISTEN_PORT=9000`
 |--------|------|-------------|
 | GET | `/` | Index page (HTML) |
 | GET | `/api/links` | List links – Filters: `?page=N`, `?q=...`, `?url_like=...`, `?category=...`, `?note=...`, `?included=true`, `?marked=true`, `?read=true/false` · Single link: `?id=123` · Include content: `?content=true` (omitted by default) |
+| – | – | **Semantic search:** `?q=...&semantic=true` ranks all entries by embedding similarity (top 60, `score` field per hit) |
 | PATCH | `/api/links?id=X` | Update fields (`?note=...&included=true/false&marked=true/false&read=true/false`) |
 | DELETE | `/api/links?id=X` | Delete link |
 | GET | `/api/categories` | List categories with counts |
 | GET/POST | `/api/share` | Get link(s) by ID |
 | POST | `/linkshare` | Add link (`{"url":"...","note":"..."}`) |
-| GET | `/process-entries` | Process pending entries (batch) |
+| GET | `/process-entries` | Process pending entries (batch). **Auto-categorizes** all newly summarized entries afterwards |
 | GET | `/api/manual` | Get this manual (raw Markdown, `?lang=de` or `?lang=en`) |
 | GET | `/api/config` | Get configuration |
 | POST | `/api/config` | Save configuration |
@@ -180,6 +206,10 @@ Open `http://localhost:8080` in your browser. Change port via `LISTEN_PORT=9000`
 | GET | `/api/feed/read?id=X` | Set read=1 (mark as read) |
 | GET | `/api/feed/unread?id=X` | Set read=0 (mark as unread) |
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
+| GET | `/api/map` | Topic map: status, counters and all 2D points (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
+| POST | `/api/map/embeddings` | Start background embedding+projection (`?force=true` = recompute all vectors) – returns `202` immediately |
+| GET | `/api/map/status` | Progress of the map job (`job.phase`, `job.done`, `job.total`, `job.pct`) |
+| POST | `/api/map/query` | Semantic search over the map vectors (`{"query":"..."}` → top 300 with cosine scores) |
 
 ---
 

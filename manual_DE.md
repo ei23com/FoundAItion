@@ -65,7 +65,7 @@ So landen Artikel, Videos oder ganze Playlists mit einem Klick in FoundAItion un
 
 Die Tabelle `links` wird beim ersten Start **automatisch angelegt** (`CREATE TABLE IF NOT EXISTS`).
 
-### Tabellenschema (15 Spalten)
+### Tabellenschema (17 Spalten)
 
 | Column | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -80,6 +80,11 @@ Die Tabelle `links` wird beim ersten Start **automatisch angelegt** (`CREATE TAB
 | `included` | INTEGER | `0` | Include in export/view |
 | `marked` | INTEGER | `0` | Marked flag |
 | `read` | INTEGER | `0` | Read/Unread flag |
+| `vector` | BLOB | NULL | Embedding-Vektor (Little-Endian float32) für die Themenkarte |
+| `vec_model` | TEXT | NULL | Modellname des Vektors – ein Modellwechsel invalidiert alte Vektoren automatisch |
+
+Zusätzlich legt FoundAItion automatisch die Tabelle **`map_positions`** an (`id`, `x`, `y`, `model`, `fingerprint`) mit den 2D-Koordinaten der Themenkarte. Der `fingerprint` ist ein Hash über alle Vektor-IDs + Modellnamen: ändern sich Einträge, wird die Karte beim nächsten Öffnen neu berechnet, sonst sofort aus dem Cache geladen.
+
 ---
 
 ## Schnellstart
@@ -132,6 +137,23 @@ Dann `http://localhost:8080` im Browser öffnen. Port über `LISTEN_PORT=9000` �
 - Prompt-Templates werden automatisch in der passenden Sprache geladen
 - Einstellung wird in `.env` gespeichert (`UI_LANGUAGE=de` / `UI_LANGUAGE=en`)
 
+### Themenkarte (`#map`, 🗺️-Button)
+
+Jeder Eintrag wird per Embedding-Vektor auf einer interaktiven 2D-Karte positioniert – inhaltlich ähnliche Artikel liegen nah beieinander (Barnes-Hut-t-SNE, in Go implementiert, deterministisch).
+
+**Bedienung:**
+- **Scrollen / Pinchen** = Zoom, **Ziehen** = Verschieben
+- **Hover** zeigt Titel, Kategorie und Datum; **Klick** öffnet den Artikel
+- **Kategorien-Legende**: Farbchip anklicken blendet die Kategorie ein/aus
+- **Datumsfilter**: „Von"/„Bis" grenzt den Zeitraum ein
+- **Gemeinsame Suchzeile oben** (gilt für Liste und Karte): Titel-Teilfilter; mit aktivem **✨-Button** semantische Suche über die Embedding-Vektoren (Top-Treffer größer dargestellt, 🎯 zoomt zu den Treffern); daneben Datumsfilter „Von/Bis“
+
+**Einbettungen:**
+- Ohne konfiguriertes Modell läuft ein lokaler Hash-Embedder (offline, sofort, rein lexikalische Qualität)
+- Mit `EMBEDDING_BASE_URL` + `EMBEDDING_MODEL` (z.B. llama.cpp mit Qwen3-Embedding-GGUF) entstehen echte semantische Vektoren. Der Backfill startet nie automatisch – im Karten-Overlay erscheint **„Jetzt einbetten"**, oder `POST /api/map/embeddings`
+- Fortschritt erscheint als Progress-Overlay; die Karte lädt danach automatisch neu
+- 2D-Positionen werden in der Tabelle `map_positions` gecacht → Neustarts sind instant
+
 ---
 
 ## Umgebungsvariablen
@@ -155,6 +177,9 @@ Dann `http://localhost:8080` im Browser öffnen. Port über `LISTEN_PORT=9000` �
 | `RSS_BASE_URL` | *(leer)* | Basis-URL für Feed-Links (z.B. bei Reverse Proxy). Leer = automatisch aus dem Request-Host. |
 | `RSS_ITEM_COUNT` | `30` | Maximale Einträge im Atom-Feed |
 | `RSS_EXTRA_ACTION_LINK` | *(leer)* | Kommagetrennte Liste von Extra-Links: `[Name](url)` – `{id}` wird ersetzt (z.B. `[Veröffentlichen](http://10.1.1.11:1880/publish?id={id}),[Als gelesen](http://10.1.1.11:1880/read?id={id})`) |
+| `EMBEDDING_BASE_URL` | *(leer)* | OpenAI-kompatibler `/embeddings`-Endpunkt für die Themenkarte. Leer = lokaler Hash-Embedder (offline) |
+| `EMBEDDING_MODEL` | *(leer)* | Modellname für Embeddings (z.B. `Qwen3-Embedding-4B-GGUF`). Wechsel invalidiert alte Vektoren |
+| `EMBEDDING_API_KEY` | *(leer)* | API-Key für den Embedding-Endpunkt (llama.cpp: nicht nötig). Fällt auf `OPENAI_API_KEY` zurück |
 
 ---
 
@@ -164,12 +189,13 @@ Dann `http://localhost:8080` im Browser öffnen. Port über `LISTEN_PORT=9000` �
 |---------|------|-------------|
 | GET | `/` | Index page (HTML) |
 | GET | `/api/links` | Links auflisten – Filter: `?page=N`, `?q=...`, `?url_like=...`, `?category=...`, `?note=...`, `?included=true`, `?marked=true`, `?read=true/false` · Einzellink: `?id=123` · Inhalt mitsenden: `?content=true` (sonst ohne content-Spalte) |
+| – | – | **Semantische Suche:** `?q=...&semantic=true` rankt alle Einträge per Embedding-Ähnlichkeit (Top 60, Feld `score` je Treffer) |
 | PATCH | `/api/links?id=X` | Felder aktualisieren (`?note=...&included=true/false&marked=true/false&read=true/false`) |
 | DELETE | `/api/links?id=X` | Delete link |
 | GET | `/api/categories` | List categories with counts |
 | GET/POST | `/api/share` | Get link(s) by ID |
 | POST | `/linkshare` | Add link (`{"url":"...","note":"..."}`) |
-| GET | `/process-entries` | Process pending entries (batch) |
+| GET | `/process-entries` | Verarbeitet anstehende Einträge (Batch). **Kategorisiert anschließend automatisch** alle neu zusammengefassten Einträge |
 | GET | `/api/manual` | Get this manual (raw Markdown) |
 | GET | `/api/config` | Get configuration |
 | POST | `/api/config` | Save configuration |
@@ -180,6 +206,10 @@ Dann `http://localhost:8080` im Browser öffnen. Port über `LISTEN_PORT=9000` �
 | GET | `/api/feed/read?id=X` | Set read=1 (als gelesen markieren) |
 | GET | `/api/feed/unread?id=X` | Set read=0 (als ungelesen markieren) |
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
+| GET | `/api/map` | Themenkarte: Status, Zähler und alle 2D-Punkte (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
+| POST | `/api/map/embeddings` | Startet Embedding+Projektion im Hintergrund (`?force=true` = alle Vektoren neu) – gibt sofort `202` zurück |
+| GET | `/api/map/status` | Fortschritt des Karten-Jobs (`job.phase`, `job.done`, `job.total`, `job.pct`) |
+| POST | `/api/map/query` | Semantische Suche über die Kartenvektoren (`{"query":"..."}` → Top-300 mit Kosinus-Scores) |
 
 ---
 
