@@ -594,6 +594,8 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 	// Auto-summary in background (web pages only)
 	if a.cfg.AutoSummarize && a.cfg.OpenAIKey != "" && !isYouTubeURL(urlStr) && strings.TrimSpace(content) != "" {
 		go func(linkID int64, c string) {
+			a.llmMu.Lock()
+			defer a.llmMu.Unlock()
 			lang := a.cfg.UILanguage
 			promptName := resolvePrompt(req.Note)
 			summary, err := a.generateSummary(c, promptName, lang)
@@ -686,6 +688,11 @@ func (a *App) processEntries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "OPENAI_API_KEY not configured", http.StatusBadGateway)
 		return
 	}
+
+	// LLM-Jobs laufen immer nacheinander (lokale Modellserver können meist nur
+	// ein Modell geladen halten – parallele Jobs würden ständig swappen).
+	a.llmMu.Lock()
+	defer a.llmMu.Unlock()
 
 	// Load entries without summary within the configured time window
 	maxDays := a.cfg.MaxProcessDays
@@ -1219,6 +1226,9 @@ func (a *App) categorizeEntries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "OPENAI_API_KEY not configured", http.StatusBadGateway)
 		return
 	}
+
+	a.llmMu.Lock()
+	defer a.llmMu.Unlock()
 
 	// Select entries that have a summary but no category
 	pending, err := a.loadUncategorizedLinks()

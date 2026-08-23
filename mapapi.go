@@ -142,42 +142,48 @@ func (a *App) runMapPipeline(force, projectOnly bool) {
 	}
 
 	if len(toEmbed) > 0 {
-		a.mapJob.set("embedding", 0, len(toEmbed), "")
-		done := 0
-		for start := 0; start < len(toEmbed); start += 500 {
-			end := min(len(toEmbed), start+500)
-			chunk := toEmbed[start:end]
+		// Lock nur für die Embedding-Phase – die reine CPU-Projektion danach
+		// blockiert andere LLM-Jobs nicht.
+		func() {
+			a.llmMu.Lock()
+			defer a.llmMu.Unlock()
+			a.mapJob.set("embedding", 0, len(toEmbed), "")
+			done := 0
+			for start := 0; start < len(toEmbed); start += 500 {
+				end := min(len(toEmbed), start+500)
+				chunk := toEmbed[start:end]
 
-			texts, terr := a.fetchEmbedTexts(chunk)
-			if terr != nil {
-				a.mapJob.fail(fmt.Sprintf("Einträge konnten nicht geladen werden: %v", terr))
-				return
-			}
-
-			for _, id := range chunk {
-				text := strings.TrimSpace(texts[id])
-				if text == "" {
-					// nothing to embed yet (no title/summary) – stay missing
-					done++
-					continue
+				texts, terr := a.fetchEmbedTexts(chunk)
+				if terr != nil {
+					a.mapJob.fail(fmt.Sprintf("Einträge konnten nicht geladen werden: %v", terr))
+					return
 				}
-				vec, verr := a.embedText(text)
-				if verr != nil {
-					if model == LocalHashModel {
-						log.Printf("[map] WARN: hash embedding failed for id=%d: %v", id, verr)
-					} else {
-						a.mapJob.fail(fmt.Sprintf("Embedding-API-Fehler (id=%d): %v", id, verr))
-						return
+
+				for _, id := range chunk {
+					text := strings.TrimSpace(texts[id])
+					if text == "" {
+						// nothing to embed yet (no title/summary) – stay missing
+						done++
+						continue
 					}
-				} else if serr := a.saveVector(id, vec, model); serr != nil {
-					log.Printf("[map] WARN: save vector id=%d: %v", id, serr)
-				}
-				done++
-				if done%10 == 0 || done == len(toEmbed) {
-					a.mapJob.set("embedding", done, len(toEmbed), "")
+					vec, verr := a.embedText(text)
+					if verr != nil {
+						if model == LocalHashModel {
+							log.Printf("[map] WARN: hash embedding failed for id=%d: %v", id, verr)
+						} else {
+							a.mapJob.fail(fmt.Sprintf("Embedding-API-Fehler (id=%d): %v", id, verr))
+							return
+						}
+					} else if serr := a.saveVector(id, vec, model); serr != nil {
+						log.Printf("[map] WARN: save vector id=%d: %v", id, serr)
+					}
+					done++
+					if done%10 == 0 || done == len(toEmbed) {
+						a.mapJob.set("embedding", done, len(toEmbed), "")
+					}
 				}
 			}
-		}
+		}()
 	}
 
 	stats, err = a.loadAllVectors(model)
@@ -423,7 +429,9 @@ func (a *App) fetchMapMeta(ids []int64) (map[int64]mapLinkMeta, error) {
 func (a *App) semanticLinks(w http.ResponseWriter, r *http.Request, q string) {
 	model := a.cfg.ActiveEmbeddingModel()
 
+	a.llmMu.Lock()
 	vec, err := a.embedText(strings.TrimSpace(q))
+	a.llmMu.Unlock()
 	if err != nil {
 		log.Printf("[search] embed query failed: %v", err)
 		http.Error(w, fmt.Sprintf("Embedding fehlgeschlagen: %v", err), http.StatusBadGateway)

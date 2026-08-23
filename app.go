@@ -28,6 +28,7 @@ type App struct {
 	prompts  map[string]string // template name → content (summary_EN, summary_DE, chapters_DE, …)
 	progress ProcessingState
 	mu       sync.Mutex   // protects receiveLink from parallel duplicates
+	llmMu    sync.Mutex   // serializes ALL llm/embedding calls (local models: only one can be loaded at a time)
 	mapJob   mapJobState // vectormap background job (embedding + projection)
 }
 
