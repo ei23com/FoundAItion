@@ -2211,7 +2211,6 @@ const mapState = {
     regions: [],           // handgezeichnete Bereiche {id,name,polygon,color}
     draw: null,            // Zeichenmodus {id,name,color,pts:[[x,y],...]} | null
     hiddenRegions: new Set(), // ausgeblendete Bereichs-IDs (nur Ansicht)
-    selectedIdx: -1,       // mobil ausgewählter Punkt (1. Tap = Tooltip)
     hitsInfo: '',
     scale: 10, tx: 0, ty: 0, fitScale: 10,
     hoverIdx: -1,
@@ -2958,7 +2957,7 @@ function drawMapFrame() {
         ctx.arc(sx, sy, r, 0, 6.283185307);
         ctx.fill();
 
-        if (i === mapState.hoverIdx || i === mapState.selectedIdx) {
+        if (i === mapState.hoverIdx) {
             hoverScreen = [sx, sy];
             ctx.globalAlpha = 1;
             ctx.strokeStyle = '#fff';
@@ -2969,6 +2968,38 @@ function drawMapFrame() {
         }
     }
     ctx.globalAlpha = 1;
+
+    // Auto-Labels erst tief im Zoom (Mobile-Äquivalent zum Hover)
+    const labelT = mapState.fitScale * 9;
+    if (!mapState.draw && mapState.scale >= labelT && pts.length > 0) {
+        const txtColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#eee';
+        const candidates = [];
+        for (const i of mapState.visible) {
+            const p = pts[i];
+            const sx = p.x * mapState.scale + mapState.tx;
+            const sy = p.y * mapState.scale + mapState.ty;
+            if (sx < 10 || sy < 24 || sx > w - 10 || sy > h - 6) continue;
+            if (!p.title) continue;
+            const dimmed = hasSearch ? !mapState.scores.has(p.id) : false;
+            if (dimmed) continue; // ausgeblendete nicht beschriften
+            candidates.push({ sx, sy, title: p.title });
+        }
+        const maxLabels = 40;
+        const stride = candidates.length > maxLabels ? Math.ceil(candidates.length / maxLabels) : 1;
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.textBaseline = 'alphabetic';
+        for (let k = 0; k < candidates.length; k += stride) {
+            const cand = candidates[k];
+            ctx.globalAlpha = 0.92;
+            const text = cand.title.length > 30 ? cand.title.slice(0, 29) + '…' : cand.title;
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = bg;
+            ctx.strokeText(text, cand.sx + 7, cand.sy - 6);
+            ctx.fillStyle = txtColor;
+            ctx.fillText(text, cand.sx + 7, cand.sy - 6);
+        }
+        ctx.globalAlpha = 1;
+    }
 
     // Zeichenvorschau über den Punkten
     if (mapState.draw && mapState.draw.pts.length > 0) {
@@ -3038,9 +3069,6 @@ function setupMapCanvasEvents() {
         c.setPointerCapture(e.pointerId);
         mapState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         mapState.dragMoved = false;
-        if (mapState.pointers.size === 1) {
-            mapState.downXY = { x: e.clientX, y: e.clientY };
-        }
         if (mapState.pointers.size === 2) {
             const ptsArr = [...mapState.pointers.values()];
             mapState.pinchDist = Math.hypot(ptsArr[0].x - ptsArr[1].x, ptsArr[0].y - ptsArr[1].y);
@@ -3109,60 +3137,16 @@ function setupMapCanvasEvents() {
     function endPointer(e) {
         const had = mapState.pointers.delete(e.pointerId);
         wrap.classList.remove('panning');
-        if (!had || mapState.pointers.size !== 0) return;
-
-        const isTouch = (e.pointerType || mapState.lastPointerType || 'touch') !== 'mouse';
-        const moved = mapState.downXY
-            ? Math.hypot(e.clientX - mapState.downXY.x, e.clientY - mapState.downXY.y)
-            : 999;
-
-        if (!isTouch) {
-            // Maus: Hover-Punkt direkt öffnen
+        if (had && !mapState.dragMoved && mapState.pointers.size === 0) {
             updateMapHover(e);
             if (mapState.hoverIdx >= 0) {
                 const p = mapState.points[mapState.hoverIdx];
                 window.__cameFromMap = true;
                 location.hash = '#link/' + p.id;
             }
-        } else if (moved <= 12) {
-            // Touch: Tap (Positionsbasiert – Jitter egal)
-            handleTouchTap(e);
-        } else {
-            hideMapTooltip(); // geschwenkt → Auswahl verwerfen
         }
     }
 
-    // handleTouchTap: 1. Tippen wählt aus und zeigt den Tooltip,
-    // 2. Tippen auf denselben Punkt öffnet den Artikel.
-    function handleTouchTap(e) {
-        const rect = mapState.canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-        let best = -1, bestD = 13 * 13;
-        for (const i of mapState.visible) {
-            const p = mapState.points[i];
-            const sx = p.x * mapState.scale + mapState.tx;
-            const sy = p.y * mapState.scale + mapState.ty;
-            const d = (sx - mx) * (sx - mx) + (sy - my) * (sy - my);
-            if (d < bestD) { bestD = d; best = i; }
-        }
-        if (best < 0) {
-            mapState.selectedIdx = -1;
-            hideMapTooltip();
-            return;
-        }
-        if (mapState.selectedIdx === best) {
-            mapState.selectedIdx = -1;
-            hideMapTooltip();
-            const p = mapState.points[best];
-            window.__cameFromMap = true;
-            location.hash = '#link/' + p.id;
-            return;
-        }
-        mapState.selectedIdx = best;
-        mapState.hoverIdx = best;
-        requestMapDraw();
-        showMapTooltipFor(best, __('map_touch_open'));
-    }
     c.addEventListener('pointerup', endPointer);
     c.addEventListener('pointercancel', endPointer);
     c.addEventListener('pointerleave', () => { hideMapTooltip(); });
@@ -3232,11 +3216,7 @@ function updateMapHover(e) {
 }
 
 function hideMapTooltip() {
-    if (mapState.hoverIdx !== -1 || mapState.selectedIdx !== -1) {
-        mapState.hoverIdx = -1;
-        mapState.selectedIdx = -1;
-        requestMapDraw();
-    }
+    if (mapState.hoverIdx !== -1) { mapState.hoverIdx = -1; requestMapDraw(); }
     if (mapState.tooltipEl) mapState.tooltipEl.classList.remove('show');
 }
 
