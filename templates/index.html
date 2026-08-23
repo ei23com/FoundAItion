@@ -228,10 +228,12 @@
         .date-dd-btn.active .dd-label { color:#a78bfa; }
         .date-dd-panel {
             display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:80;
-            background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px;
-            padding:0.7rem; box-shadow:0 12px 30px rgba(0,0,0,0.4);
+            background:#111827; /* opak – sonst schlecht lesbar */
+            border:1px solid var(--border); border-radius:10px;
+            padding:0.7rem; box-shadow:0 12px 30px rgba(0,0,0,0.5);
             flex-direction:column; gap:0.55rem; min-width:235px;
         }
+        html[data-theme="light"] .date-dd-panel { background:#ffffff; }
         .date-dd-panel.open { display:flex; }
         .date-dd-panel label {
             display:flex; align-items:center; justify-content:space-between; gap:0.6rem;
@@ -259,12 +261,12 @@
         .region-chip button:hover { color:#a78bfa; }
         .map-canvas-wrap.drawing { cursor:crosshair; }
 
-        /* Mobile: kompakte Suchzeile */
+        /* Mobile: kompakte Suchzeile; Aktionen nur im Burger-Menü */
         @media (max-width: 640px) {
             .search-row { gap: 0.3rem; }
             .btn-icon { padding: 0.32rem 0.45rem; font-size: 0.85rem; }
             .search-input-wrap input { font-size: 0.85rem; }
-            .hdr-date-label { display:none; } /* nur im Dropdown vorhanden */
+            .header-btn-add, .header-btn-llm, #viewToggleBtn { display:none; }
         }
         @media (max-width: 480px) {
             .dd-label { display:none; } /* nur 📅-Icon */
@@ -1582,7 +1584,22 @@
             border-radius:12px; overflow:hidden; cursor:grab;
         }
         .map-canvas-wrap.panning { cursor:grabbing; }
-        #mapCanvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+        #mapCanvas {
+            position:absolute; inset:0; width:100%; height:100%; display:block;
+            touch-action:none; /* Pinch/Drag vom Canvas statt von der Seite */
+        }
+        .map-zoom-controls {
+            position:absolute; top:10px; right:10px; z-index:15;
+            display:flex; flex-direction:column; gap:6px;
+        }
+        .map-zoom-controls button {
+            width:34px; height:34px; border-radius:8px;
+            border:1px solid var(--border); background:var(--bg-primary);
+            color:var(--text); font-size:1rem; font-weight:600;
+            cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,0.35);
+            line-height:1;
+        }
+        .map-zoom-controls button:hover { border-color:#a78bfa; color:#a78bfa; }
         .map-tooltip {
             position:absolute; pointer-events:none; z-index:30;
             max-width:320px; color:var(--text-primary);
@@ -1643,6 +1660,7 @@
                 <button id="menuProcess">🧠 <span data-i18n="btn_process">Zusammenfassungen erstellen</span></button>
                 <button id="menuCategorize">🏷️ <span data-i18n="menu_categorize">Kategorisierung</span></button>
                 <button id="menuMap">🗺️ <span data-i18n="menu_map">Themenkarte</span></button>
+                <button id="menuListView">📋 <span data-i18n="view_to_list">Zur Listenansicht wechseln</span></button>
                 <button id="menuConfig">⚙️ <span data-i18n="menu_config">Konfiguration</span></button>
                 <hr class="hamburger-divider">
                 <span class="hamburger-header"><span data-i18n="menu_language">Sprache / Language</span></span>
@@ -1669,11 +1687,6 @@
                     <button class="date-dd-reset" id="dateDDReset">✕ <span data-i18n="mw_all">Alle</span></button>
                 </div>
             </div>
-            <button class="btn-icon" id="refreshBtn" title="Neu laden">
-                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                    <path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                </svg>
-            </button>
             <button class="btn-icon header-btn-llm" id="headerLlmBtn" title="Zusammenfassungen erstellen">🧠</button>
             <button class="btn-icon header-btn-map" id="viewToggleBtn" title="Themenkarte anzeigen">🗺️</button>
             <button class="btn-icon header-btn-add" id="headerAddBtn" title="Link hinzufügen">➕</button>
@@ -1880,6 +1893,9 @@ const translations = {
         rg_redraw: 'Neu zeichnen',
         rg_delete: 'Löschen',
         rg_delete_confirm: 'Bereich „%s“ löschen?',
+        rg_show: 'Einblenden',
+        rg_hide: 'Ausblenden',
+        mw_fit: 'Gesamtansicht',
     },
     en: {
         menu_manual:   'Manual',
@@ -1928,6 +1944,9 @@ const translations = {
         rg_redraw: 'Redraw',
         rg_delete: 'Delete',
         rg_delete_confirm: "Delete region '%s'?",
+        rg_show: 'Show',
+        rg_hide: 'Hide',
+        mw_fit: 'Fit whole map',
         menu_language: 'Language / Sprache',
         search_placeholder: 'Search by title or URL...',
         all_categories: 'All',
@@ -2064,7 +2083,6 @@ let currentPage    = 1;
 const appEl       = document.getElementById('app');
 const searchRow   = document.getElementById('searchRow');
 const searchInput = document.getElementById('searchInput');
-const refreshBtn  = document.getElementById('refreshBtn');
 const toastEl     = document.getElementById('toast');
 
 // ── API ───────────────────────────────────────────────────
@@ -2089,7 +2107,6 @@ window.addEventListener('hashchange', checkRoute);
 
 // ── Load data ─────────────────────────────────────────────
 async function load() {
-    refreshBtn.classList.add('spinning');
     try {
         let url = '/api/links?page=' + currentPage;
         if (activeCategory) url += '&category=' + encodeURIComponent(activeCategory);
@@ -2119,9 +2136,7 @@ async function load() {
         allLinks = [];
         categories = [];          // reset bei Fehler - verhindert crash in renderList()
         appEl.innerHTML = `<div class="empty">Fehler: ${esc(e.message)}</div>`;
-    } finally {
-        refreshBtn.classList.remove('spinning');
-    }
+    } finally { /* refresh button removed */ }
     // Re-render current view
     if (currentView === 'detail' && currentLink) {
         const found = allLinks.find(l => l.id === currentLink.id);
@@ -2193,6 +2208,7 @@ const mapState = {
     windowSet: null,       // Set(ids im Zeitraum) oder null
     regions: [],           // handgezeichnete Bereiche {id,name,polygon,color}
     draw: null,            // Zeichenmodus {id,name,color,pts:[[x,y],...]} | null
+    hiddenRegions: new Set(), // ausgeblendete Bereichs-IDs (nur Ansicht)
     hitsInfo: '',
     scale: 10, tx: 0, ty: 0, fitScale: 10,
     hoverIdx: -1,
@@ -2218,6 +2234,21 @@ function mapColorOf(p) {
 }
 
 function mapW2S(x, y) { return [x * mapState.scale + mapState.tx, y * mapState.scale + mapState.ty]; }
+
+// mapZoomBy zoomt um den Mittelpunkt der Ansicht (Buttons / Mobile).
+function mapZoomBy(factor) {
+    const w = mapState.canvas ? mapState.canvas.clientWidth : 600;
+    const h = mapState.canvas ? mapState.canvas.clientHeight : 400;
+    const [wx, wy] = mapS2W(w / 2, h / 2);
+    const ns = Math.min(mapState.fitScale * 60,
+        Math.max(mapState.fitScale * 0.4, mapState.scale * factor));
+    mapState.scale = ns;
+    mapState.tx = w / 2 - wx * ns;
+    mapState.ty = h / 2 - wy * ns;
+    mapState._userNavigated = true;
+    hideMapTooltip();
+    requestMapDraw();
+}
 function mapS2W(x, y) { return [(x - mapState.tx) / mapState.scale, (y - mapState.ty) / mapState.scale]; }
 
 async function showMap() {
@@ -2270,6 +2301,11 @@ function renderMapShell() {
             <div class="map-regions" id="mapRegionsList"></div>
             <div class="map-canvas-wrap" id="mapWrap">
                 <canvas id="mapCanvas"></canvas>
+                <div class="map-zoom-controls">
+                    <button id="mwZoomIn" title="+">＋</button>
+                    <button id="mwZoomOut" title="−">−</button>
+                    <button id="mwFit" title="${__('mw_fit')}">⌂</button>
+                </div>
                 <div class="map-tooltip" id="mapTooltip"></div>
             </div>
         </div>`;
@@ -2297,6 +2333,15 @@ function renderMapShell() {
     document.getElementById('mwDraw').addEventListener('click', () => {
         if (mapState.draw) cancelRegionDraw();
         else startRegionDraw(null);
+    });
+    document.getElementById('mwZoomIn').addEventListener('click', () => mapZoomBy(1.35));
+    document.getElementById('mwZoomOut').addEventListener('click', () => mapZoomBy(1 / 1.35));
+    document.getElementById('mwFit').addEventListener('click', () => {
+        const b = mapBounds();
+        if (!b) return;
+        fitViewToBounds(b.minX, b.minY, b.maxX, b.maxY);
+        mapState._userNavigated = false;
+        requestMapDraw();
     });
     renderRegionsList();
 
@@ -2618,9 +2663,10 @@ function renderRegionsList() {
     if (mapState.regions.length === 0) { el.innerHTML = ''; return; }
     el.innerHTML = '<span class="hdr-date-label">' + esc(__('rg_title')) + '</span>' +
         mapState.regions.map(rg => `
-        <span class="map-legend-chip region-chip">
+        <span class="map-legend-chip region-chip ${mapState.hiddenRegions.has(rg.id) ? 'hidden-cat' : ''}">
             <span class="map-legend-dot" style="background:${rg.color || regionColor(rg.id)};"></span>
             <span class="rg-name" data-rg="${rg.id}" data-action="rename" title="${__('rg_rename_title')}">${esc(rg.name)}</span>
+            <button data-rg="${rg.id}" data-action="toggle" title="${mapState.hiddenRegions.has(rg.id) ? __('rg_show') : __('rg_hide')}">${mapState.hiddenRegions.has(rg.id) ? '🚫' : '👁'}</button>
             <button data-rg="${rg.id}" data-action="redraw" title="${__('rg_redraw')}">✏️</button>
             <button data-rg="${rg.id}" data-action="delete" title="${__('rg_delete')}">🗑️</button>
         </span>`).join('');
@@ -2632,6 +2678,12 @@ function renderRegionsList() {
             const rg = mapState.regions.find(r => r.id === id);
             if (!rg) return;
             if (btnEl.dataset.action === 'rename') renameRegion(rg);
+            else if (btnEl.dataset.action === 'toggle') {
+                if (mapState.hiddenRegions.has(id)) mapState.hiddenRegions.delete(id);
+                else mapState.hiddenRegions.add(id);
+                renderRegionsList();
+                requestMapDraw();
+            }
             else if (btnEl.dataset.action === 'redraw') startRegionDraw(rg);
             else deleteRegion(rg);
         });
@@ -2869,6 +2921,7 @@ function drawMapFrame() {
 
     // Handgezeichnete Bereiche unter den Punkten
     for (const rg of mapState.regions) {
+        if (mapState.hiddenRegions.has(rg.id)) continue;
         drawRegionShape(ctx, rg.polygon, rg.color || regionColor(rg.id), false);
     }
 
@@ -4345,6 +4398,12 @@ document.getElementById('menuMap')?.addEventListener('click', () => {
     if (location.hash === '#map') showMap();
     else location.hash = '#map';
 });
+document.getElementById('menuListView')?.addEventListener('click', () => {
+    hamburgerDropdown?.classList.remove('open');
+    window.__cameFromMap = false;
+    if (location.hash === '' || location.hash === '#') showList();
+    else location.hash = '';
+});
 if (linkModalClose) linkModalClose.addEventListener('click', closeLinkModal);
 if (linkModalCancel) linkModalCancel.addEventListener('click', closeLinkModal);
 if (linkModalOverlay) {
@@ -4398,8 +4457,6 @@ if (searchClearBtn) {
         load(); // Neu laden ohne Filter
     });
 }
-
-refreshBtn.addEventListener('click', () => { load(); });
 
 // ── Language Buttons ─────────────────────────────────────
 document.querySelectorAll('.lang-btn').forEach(btn => {
