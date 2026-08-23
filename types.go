@@ -110,6 +110,7 @@ type Link struct {
 	Included    *bool  `json:"included,omitempty"` // included flag (true/false/null)
 	Marked      bool   `json:"marked"`             // marked flag
 	Read        bool   `json:"read"`               // read flag
+	Score       float64 `json:"score,omitempty"`  // semantic search similarity (0..1)
 }
 
 // ─── API Request / Response Types ────────────────────────────────────────────
@@ -133,16 +134,26 @@ type LinkAddResponse struct {
 
 // ProcessResponse is returned by GET /process-entries.
 type ProcessResponse struct {
-	Processed int      `json:"processed"`
-	Skipped   int      `json:"skipped"`
-	Errors    []string `json:"errors,omitempty"`
-	Duration  string   `json:"duration"`
+	Processed   int      `json:"processed"`
+	Skipped     int      `json:"skipped"`
+	Categorized int      `json:"categorized,omitempty"`
+	Errors      []string `json:"errors,omitempty"`
+	Duration    string   `json:"duration"`
 }
 
 // linkListResponse is the response for GET /api/links.
 type linkListResponse struct {
 	Links []Link `json:"links"`
 	Total int    `json:"total"`
+}
+
+// mapRegion is a hand-drawn area on the topic map. The polygon is stored in
+// world coordinates (the same ±50 space as the projected points).
+type mapRegion struct {
+	ID      int64       `json:"id"`
+	Name    string      `json:"name"`
+	Polygon [][2]float64 `json:"polygon"`
+	Color   string      `json:"color,omitempty"`
 }
 
 // ─── Helper: scan a single row into a Link pointer ───────────────────────────

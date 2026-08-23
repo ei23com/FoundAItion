@@ -35,6 +35,7 @@ const pageSizeDB = 20
 
 func main() {
 	cfg := loadConfig()
+	cfg.resolveEmbeddingDefaults()
 
 	listenPort := 8080
 	if p, err := strconv.Atoi(envOrDefault("LISTEN_PORT", "")); err == nil && p > 0 {
@@ -51,6 +52,17 @@ func main() {
 	// Ensure the table exists
 	if err := ensureTableExists(db, TableName); err != nil {
 		log.Fatalf("Table missing or unreachable: %v", err)
+	}
+
+	// Migrate schema for the vectormap feature (idempotent)
+	if err := ensureVectorColumns(db, TableName); err != nil {
+		log.Fatalf("Vectormap migration failed: %v", err)
+	}
+	if err := ensureMapPositionsTable(db); err != nil {
+		log.Fatalf("Vectormap position cache migration failed: %v", err)
+	}
+	if err := ensureMapRegionsTable(db); err != nil {
+		log.Fatalf("Vectormap regions migration failed: %v", err)
 	}
 
 	// Startup diagnostics
@@ -101,6 +113,11 @@ func logStartupDiagnostics(cfg Config) {
 	if cfg.WhisperURL != "" {
 		log.Printf("Whisper Server: %s (%s)", cfg.WhisperURL, cfg.WhisperModel)
 	}
+	if model := cfg.ActiveEmbeddingModel(); model == LocalHashModel {
+		log.Println("Vectormap: no embedding model configured – using local hash-embedder (offline fallback)")
+	} else {
+		log.Printf("Vectormap: embeddings via %s (%s)", cfg.EmbeddingBaseURL, model)
+	}
 }
 
 // setupHTTPServer configures and starts the HTTP server.
@@ -121,6 +138,11 @@ func setupHTTPServer(app *App, listenPort int, cfg Config) *http.Server {
 	mux.HandleFunc("/api/config", app.handleAPI)
 	mux.HandleFunc("/api/language", app.handleAPI)
 	mux.HandleFunc("/api/categorize", app.handleAPI)
+	mux.HandleFunc("/api/map", app.handleAPI)
+	mux.HandleFunc("/api/map/embeddings", app.handleAPI)
+	mux.HandleFunc("/api/map/status", app.handleAPI)
+	mux.HandleFunc("/api/map/query", app.handleAPI)
+	mux.HandleFunc("/api/map/regions", app.handleAPI)
 	mux.HandleFunc("/api/update-ytdlp", app.handleUpdateYtDlp)
 	mux.HandleFunc("/rss", app.handleRSS)
 	mux.HandleFunc("/api/feed/mark", app.handleFeedAPI)

@@ -27,7 +27,8 @@ type App struct {
 	cfg      Config
 	prompts  map[string]string // template name → content (summary_EN, summary_DE, chapters_DE, …)
 	progress ProcessingState
-	mu       sync.Mutex // protects receiveLink from parallel duplicates
+	mu       sync.Mutex   // protects receiveLink from parallel duplicates
+	mapJob   mapJobState // vectormap background job (embedding + projection)
 }
 
 // newApp creates a new App instance with the given DB and config.

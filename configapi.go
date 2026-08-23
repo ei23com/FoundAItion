@@ -68,6 +68,11 @@ var configSchema = []envConfigEntry{
 	{Key: "CATEGORIES_EN", Label: "Categories (EN)", Description: "English categories – comma-separated (used when UI language is EN)", Section: "categorize"},
 	{Key: "CATEGORIZE_MODEL", Label: "Categorize Model", Description: "Optional separate model for categorization (e.g. gpt-4o-mini). Leave empty to use the default model.", Section: "categorize"},
 
+	// ── Vectormap ──
+	{Key: "EMBEDDING_BASE_URL", Label: "Embedding Base URL", Description: "Basis-URL eines OpenAI-kompatiblen /embeddings-Endpunkts (z.B. llama.cpp-Server mit Embedding-Modell). Leer = wie OPENAI_BASE_URL.", Section: "vectormap"},
+	{Key: "EMBEDDING_MODEL", Label: "Embedding Modell", Description: "Modellname für Text-Embeddings (z.B. Qwen3-Embedding-4B-GGUF). Leer = lokaler Offline-Fallback (Hash-Vektoren, geringere Qualität).", Section: "vectormap"},
+	{Key: "EMBEDDING_API_KEY", Label: "Embedding API-Key", Description: "API-Key für den Embedding-Endpunkt. Leer = wie OPENAI_API_KEY.", Section: "vectormap", Secret: true},
+
 	// ── RSS Feed ──
 	{Key: "RSS_BASE_URL", Label: "RSS Basis-URL", Description: "Basis-URL für Feed-Links (z.B. bei Reverse Proxy). Leer = automatisch aus Request-Host.", Section: "rss"},
 	{Key: "RSS_ITEM_COUNT", Label: "RSS Einträge", Description: "Maximale Anzahl Einträge im Feed (default: 30)", Section: "rss", Type: "number"},
@@ -221,7 +226,7 @@ func (a *App) saveConfig(w http.ResponseWriter, r *http.Request) {
 	lines = append(lines, "# Diese Datei wird von der Web-UI verwaltet\n")
 
 	// Nach Sektionen sortieren (gleiche Reihenfolge wie Schema)
-	sectionOrder := map[string]int{"openai": 0, "whisper": 1, "youtube": 2, "database": 3, "general": 4}
+	sectionOrder := map[string]int{"openai": 0, "whisper": 1, "youtube": 2, "database": 3, "general": 4, "vectormap": 5}
 	type kv struct {
 		k, v string
 		sec  int
@@ -263,6 +268,7 @@ func (a *App) saveConfig(w http.ResponseWriter, r *http.Request) {
 					"database":   "Database",
 					"general":    "General",
 					"categorize": "Categorization",
+					"vectormap":  "Vectormap / Embeddings",
 					"rss":        "RSS Feed",
 					"tools":      "Tools",
 				}[s.Section]
@@ -299,6 +305,8 @@ func (a *App) saveConfig(w http.ResponseWriter, r *http.Request) {
 			a.applyConfigValue(k, v)
 		}
 	}
+	// Embedding-Endpunkt: Fallbacks auf OpenAI-Einstellungen neu auflösen
+	a.cfg.resolveEmbeddingDefaults()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -339,5 +347,11 @@ func (a *App) applyConfigValue(key, value string) {
 		a.cfg.CategoriesEN = value
 	case "CATEGORIZE_MODEL":
 		a.cfg.CategorizeModel = value
+	case "EMBEDDING_BASE_URL":
+		a.cfg.EmbeddingBaseURL = value
+	case "EMBEDDING_MODEL":
+		a.cfg.EmbeddingModel = value
+	case "EMBEDDING_API_KEY":
+		a.cfg.EmbeddingAPIKey = value
 	}
 }

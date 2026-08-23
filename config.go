@@ -33,7 +33,16 @@ type Config struct {
 	CategoriesDE          string // German category list for auto-categorization
 	CategoriesEN          string // English category list for auto-categorization
 	CategorizeModel       string // Separate model for categorization (optional, defaults to OpenAIModel)
+
+	// Vectormap / embeddings
+	EmbeddingBaseURL string // Base URL of the OpenAI-compatible /embeddings endpoint (default: OPENAI_BASE_URL)
+	EmbeddingModel   string // Embedding model name. Empty → local hash-embedder (offline fallback)
+	EmbeddingAPIKey  string // API key for the embedding endpoint (default: OPENAI_API_KEY)
 }
+
+// LocalHashModel is the pseudo-model identifier used when no embedding API
+// is configured (deterministic feature-hashing embedder).
+const LocalHashModel = "local-hash"
 
 // TableName is the database table name, hardcoded to "links".
 const TableName = `"links"`
@@ -77,7 +86,31 @@ func loadConfig() Config {
 		CategoriesDE:          envOrDefault("CATEGORIES_DE", "Künstliche Intelligenz,Social Media Marketing,Persönlichkeitsentwicklung & Produktivität,Philosophie & Psychologie,Politik,Wissenschaft,Wirtschaft & Finanzen,Technologie & Software,Unsortiert"),
 		CategoriesEN:          envOrDefault("CATEGORIES_EN", "Artificial Intelligence,Social Media Marketing,Personal Development & Productivity,Philosophy & Psychology,Politics,Science,Economy & Finance,Technology & Software,Uncategorized"),
 		CategorizeModel:       envOrDefault("CATEGORIZE_MODEL", ""),
+
+		EmbeddingBaseURL: envOrDefault("EMBEDDING_BASE_URL", ""), // "" → fall back to OPENAI_BASE_URL below
+		EmbeddingModel:   envOrDefault("EMBEDDING_MODEL", ""),
+		EmbeddingAPIKey:  envOrDefault("EMBEDDING_API_KEY", ""), // "" → fall back to OPENAI_API_KEY below
 	}
+}
+
+// resolveEmbeddingDefaults fills the embedding endpoint settings from the
+// general OpenAI settings when they are not explicitly configured.
+func (c *Config) resolveEmbeddingDefaults() {
+	if c.EmbeddingBaseURL == "" {
+		c.EmbeddingBaseURL = c.OpenAIBaseURL
+	}
+	if c.EmbeddingAPIKey == "" {
+		c.EmbeddingAPIKey = c.OpenAIKey
+	}
+}
+
+// ActiveEmbeddingModel returns the model identifier used for all vectors in
+// the current map: the configured API model or the local hash fallback.
+func (c *Config) ActiveEmbeddingModel() string {
+	if c.EmbeddingModel != "" {
+		return c.EmbeddingModel
+	}
+	return LocalHashModel
 }
 
 // ─── Environment Variable Helpers ────────────────────────────────────────────
