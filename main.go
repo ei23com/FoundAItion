@@ -158,6 +158,9 @@ func setupHTTPServer(app *App, listenPort int, cfg Config) *http.Server {
 			http.NotFound(w, r)
 			return
 		}
+		// Kein heuristisches Cachen der UI – Änderungen sind sonst auf
+		// Mobilgeräten oft erst nach hartem Reload sichtbar.
+		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFileFS(w, r, templateFS, "templates/index.html")
 	})
 

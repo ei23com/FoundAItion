@@ -3034,9 +3034,13 @@ function setupMapCanvasEvents() {
 
     c.addEventListener('pointerdown', (e) => {
         if (mapState.draw) return; // im Zeichenmodus kein Pan/Kapturen
+        mapState.lastPointerType = e.pointerType || '';
         c.setPointerCapture(e.pointerId);
         mapState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         mapState.dragMoved = false;
+        if (mapState.pointers.size === 1) {
+            mapState.downXY = { x: e.clientX, y: e.clientY };
+        }
         if (mapState.pointers.size === 2) {
             const ptsArr = [...mapState.pointers.values()];
             mapState.pinchDist = Math.hypot(ptsArr[0].x - ptsArr[1].x, ptsArr[0].y - ptsArr[1].y);
@@ -3105,19 +3109,27 @@ function setupMapCanvasEvents() {
     function endPointer(e) {
         const had = mapState.pointers.delete(e.pointerId);
         wrap.classList.remove('panning');
-        if (had && !mapState.dragMoved && mapState.pointers.size === 0) {
-            if (e.pointerType === 'touch') {
-                handleTouchTap(e);
-            } else {
-                updateMapHover(e);
-                if (mapState.hoverIdx >= 0) {
-                    const p = mapState.points[mapState.hoverIdx];
-                    window.__cameFromMap = true;
-                    location.hash = '#link/' + p.id;
-                }
+        if (!had || mapState.pointers.size !== 0) return;
+
+        const isTouch = (e.pointerType || mapState.lastPointerType || 'touch') !== 'mouse';
+        const moved = mapState.downXY
+            ? Math.hypot(e.clientX - mapState.downXY.x, e.clientY - mapState.downXY.y)
+            : 999;
+
+        if (!isTouch) {
+            // Maus: Hover-Punkt direkt öffnen
+            updateMapHover(e);
+            if (mapState.hoverIdx >= 0) {
+                const p = mapState.points[mapState.hoverIdx];
+                window.__cameFromMap = true;
+                location.hash = '#link/' + p.id;
             }
+        } else if (moved <= 12) {
+            // Touch: Tap (Positionsbasiert – Jitter egal)
+            handleTouchTap(e);
+        } else {
+            hideMapTooltip(); // geschwenkt → Auswahl verwerfen
         }
-        if (mapState.pointers.size === 0) mapState.dragMoved = false;
     }
 
     // handleTouchTap: 1. Tippen wählt aus und zeigt den Tooltip,
