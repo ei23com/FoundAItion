@@ -2271,10 +2271,16 @@ async function showMap() {
 // Ein einzelner Umschalter: zeigt das Icon der ANDEREN Ansicht.
 function updateViewToggle() {
     const btn = document.getElementById('viewToggleBtn');
-    if (!btn) return;
+    const mMap = document.getElementById('menuMap');
+    const mList = document.getElementById('menuListView');
     const onMap = currentView === 'map';
-    btn.textContent = onMap ? '📋' : '🗺️';
-    btn.title = onMap ? __('view_to_list') : __('view_to_map');
+    if (btn) {
+        btn.textContent = onMap ? '📋' : '🗺️';
+        btn.title = onMap ? __('view_to_list') : __('view_to_map');
+    }
+    // Burger-Menü: den Eintrag der aktiven Ansicht ausblenden
+    if (mMap) mMap.style.display = onMap ? 'none' : '';
+    if (mList) mList.style.display = onMap ? '' : 'none';
 }
 
 function renderMapShell() {

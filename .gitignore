@@ -6,3 +6,6 @@ yt-dlp_linux
 foundaition.db-*
 foundaition.db.*
 server.log
+.go-toolchain/
+.gomodcache/
+.gocache/
