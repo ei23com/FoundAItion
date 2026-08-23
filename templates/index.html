@@ -2969,34 +2969,34 @@ function drawMapFrame() {
     }
     ctx.globalAlpha = 1;
 
-    // Auto-Labels erst tief im Zoom (Mobile-Äquivalent zum Hover)
-    const labelT = mapState.fitScale * 9;
+    // Auto-Labels erst tief im Zoom. Stabiler Index-Stride je Zoomstufe –
+    // kein Flackern durch frameweise wechselnde Kandidatenzahlen.
+    const labelT = mapState.fitScale * 12;
     if (!mapState.draw && mapState.scale >= labelT && pts.length > 0) {
+        let stride = 8;
+        if (mapState.scale >= mapState.fitScale * 28) stride = 2;
+        else if (mapState.scale >= mapState.fitScale * 18) stride = 4;
         const txtColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#eee';
-        const candidates = [];
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.textBaseline = 'alphabetic';
+        let drawn = 0;
         for (const i of mapState.visible) {
+            if (drawn >= 50) break;
+            if (i % stride !== 0) continue;
             const p = pts[i];
+            if (!p.title) continue;
             const sx = p.x * mapState.scale + mapState.tx;
             const sy = p.y * mapState.scale + mapState.ty;
             if (sx < 10 || sy < 24 || sx > w - 10 || sy > h - 6) continue;
-            if (!p.title) continue;
-            const dimmed = hasSearch ? !mapState.scores.has(p.id) : false;
-            if (dimmed) continue; // ausgeblendete nicht beschriften
-            candidates.push({ sx, sy, title: p.title });
-        }
-        const maxLabels = 40;
-        const stride = candidates.length > maxLabels ? Math.ceil(candidates.length / maxLabels) : 1;
-        ctx.font = '11px system-ui, sans-serif';
-        ctx.textBaseline = 'alphabetic';
-        for (let k = 0; k < candidates.length; k += stride) {
-            const cand = candidates[k];
+            if (hasSearch && !mapState.scores.has(p.id)) continue;
+            drawn++;
             ctx.globalAlpha = 0.92;
-            const text = cand.title.length > 30 ? cand.title.slice(0, 29) + '…' : cand.title;
+            const text = p.title.length > 30 ? p.title.slice(0, 29) + '…' : p.title;
             ctx.lineWidth = 3;
             ctx.strokeStyle = bg;
-            ctx.strokeText(text, cand.sx + 7, cand.sy - 6);
+            ctx.strokeText(text, sx + 7, sy - 6);
             ctx.fillStyle = txtColor;
-            ctx.fillText(text, cand.sx + 7, cand.sy - 6);
+            ctx.fillText(text, sx + 7, sy - 6);
         }
         ctx.globalAlpha = 1;
     }
