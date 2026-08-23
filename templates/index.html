@@ -4596,6 +4596,11 @@ document.getElementById('themeToggle')?.addEventListener('click', () => {
         setTheme('dark');
     }
 
+    // Firefox stellt Formularwerte beim Reload wieder her – dann muss auch
+    // das ✕ zum Leeren sichtbar sein (das input-Event feuert dabei nicht).
+    if (searchClearBtn) {
+        searchClearBtn.classList.toggle('visible', searchInput.value.trim().length > 0);
+    }
     load();
     checkRoute();
 })();
