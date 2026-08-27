@@ -1861,7 +1861,7 @@ const translations = {
         map_to: 'Bis',
         map_points: 'Punkte',
         map_missing_vecs: 'ohne Vektor',
-        map_embed_missing: 'Neue Punkte ohne Vektor einbetten und Karte aktualisieren',
+        map_embed_missing: 'Neue Punkte einbetten und platzieren · Shift+Klick: komplette Karte neu berechnen',
         map_hint: 'Scrollen = Zoom · Ziehen = Verschieben · Punkt anklicken = Artikel öffnen',
         map_embedding: 'Einbettungen werden erstellt …',
         map_projecting: 'Karte wird berechnet (t-SNE) …',
@@ -1914,7 +1914,7 @@ const translations = {
         map_to: 'To',
         map_points: 'points',
         map_missing_vecs: 'without vector',
-        map_embed_missing: 'Embed new points without vectors and refresh the map',
+        map_embed_missing: 'Embed and place new points · Shift+Click: recompute the whole map',
         map_hint: 'Scroll = zoom · drag = pan · click a point to open the article',
         map_embedding: 'Creating embeddings …',
         map_projecting: 'Computing map layout (t-SNE) …',
@@ -2329,10 +2329,11 @@ function renderMapShell() {
 
     // Suche/Datum/Semantik kommen aus der gemeinsamen Kopfzeile.
     document.getElementById('mapFocusBtn').addEventListener('click', focusMapHits);
-    document.getElementById('mwEmbed').addEventListener('click', async () => {
+    document.getElementById('mwEmbed').addEventListener('click', (e) => {
         const b = document.getElementById('mwEmbed');
         b.disabled = true;
-        try { await fetch('/api/map/embeddings', { method: 'POST' }); } catch (e) { b.disabled = false; return; }
+        const force = e.shiftKey; // Shift+Klick: komplette UMAP neu berechnen
+        fetch('/api/map/embeddings' + (force ? '?force=true' : ''), { method: 'POST' }).catch(() => { b.disabled = false; });
         updateMapEmbedBtn('waiting');
         handleMapStatus('waiting');
         startMapPoll();

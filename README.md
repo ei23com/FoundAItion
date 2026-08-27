@@ -72,7 +72,7 @@ The topic map stores one embedding vector per entry (`vector` BLOB + `vec_model`
    EMBEDDING_MODEL=Qwen3-Embedding-4B-GGUF
    ```
 
-Vectors are tagged with the model name; switching models invalidates old vectors automatically (they are re-embedded on demand). In API mode embeddings are never triggered implicitly – open the map and press **"Embed now"**, or use `POST /api/map/embeddings`. The 2D layout is cached in the `map_positions` table keyed by a fingerprint of all vectors, so restarts are instant.
+Vectors are tagged with the model name; switching models invalidates old vectors automatically (they are re-embedded on demand). In API mode embeddings are never triggered implicitly – open the map and press **"Embed now"**, or use `POST /api/map/embeddings`. The 2D layout is cached in the `map_positions` table keyed by a fingerprint of all vectors, so restarts are instant. Small additions are placed **incrementally**: new vectors are embedded and then anchored at the distance-weighted centroid of their 15 nearest already-projected neighbors (existing points keep their exact positions); large batches or `?force=true` trigger a full UMAP re-run.
 
 ### Whisper
 

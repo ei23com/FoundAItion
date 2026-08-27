@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"net/http"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -213,6 +215,22 @@ func (a *App) runMapPipeline(force, projectOnly bool) {
 		return
 	}
 
+	// Inkrementell: wenn nur wenige neue Vektoren dazukamen, werden sie an
+	// ihre projizierten Nachbarn im bestehenden Layout angehangert statt die
+	// komplette UMAP-Projektion neu zu berechnen (Sekunden statt Minuten).
+	// force=true oder große Batches gehen weiterhin über die volle Pipeline.
+	if !force && len(toEmbed) > 0 {
+		snapped, handled, serr := a.snapNewPoints(ids, X, model, fp)
+		switch {
+		case serr != nil:
+			a.mapJob.fail(fmt.Sprintf("Inkrementelle Platzierung fehlgeschlagen: %v", serr))
+			return
+		case handled:
+			log.Printf("[map] incremental placement: %d new points anchored to existing layout (full projection skipped)", snapped)
+			return
+		}
+	}
+
 	a.mapJob.set("projecting", 0, 100, "")
 	points, err := project2D(ids, X, func(pct int) {
 		a.mapJob.set("projecting", pct, 100, "")
@@ -226,6 +244,155 @@ func (a *App) runMapPipeline(force, projectOnly bool) {
 		return
 	}
 	log.Printf("[map] pipeline finished: %d embedded pass, %d points projected", len(toEmbed), n)
+}
+
+// ─── Incremental placement (anchor snapping) ────────────────────────────────
+//
+// A full UMAP run over all vectors takes minutes; adding a handful of links
+// should not force that. Instead, each newly embedded point is anchored at the
+// inverse-distance-weighted centroid of its k nearest already-projected
+// neighbors. Existing points keep their exact positions, so the map never
+// jumps. Large batches (or force=true) still trigger the full projection.
+
+const snapMinAnchors = 16 // smallest existing layout worth anchoring onto
+
+// snapBatchLimit is the maximum number of new points placed incrementally for
+// a given layout size; above it a full UMAP run produces a better result than
+// stacking anchors on top of each other.
+func snapBatchLimit(old int) int {
+	l := old / 50
+	if l < 25 {
+		l = 25
+	}
+	return l
+}
+
+// snapNewPoints stores the current layout plus anchored positions for all ids
+// without a stored position. It reports handled=false when the incremental
+// path does not apply and the caller should run the full projection.
+func (a *App) snapNewPoints(ids []int64, X [][]float32, model, fp string) (snapped int, handled bool, err error) {
+	oldPos, err := loadAllStoredPositions(a.db)
+	if err != nil {
+		return 0, false, err
+	}
+	if len(oldPos) < snapMinAnchors {
+		return 0, false, nil // no usable layout yet → full projection
+	}
+
+	oldIdx := make([]int, 0, len(ids))
+	newIdx := make([]int, 0)
+	for i, id := range ids {
+		if _, has := oldPos[id]; has {
+			oldIdx = append(oldIdx, i)
+		} else {
+			newIdx = append(newIdx, i)
+		}
+	}
+
+	// Nur Löschungen: bestehendes Layout unter dem neuen Fingerprint sichern.
+	if len(newIdx) == 0 {
+		points := make([]mapPoint, 0, len(ids))
+		for _, i := range oldIdx {
+			id := ids[i]
+			points = append(points, mapPoint{ID: id, X: oldPos[id].X, Y: oldPos[id].Y})
+		}
+		if err := storePositions(a.db, points, model, fp); err != nil {
+			return 0, false, err
+		}
+		return 0, true, nil
+	}
+
+	if len(newIdx) > snapBatchLimit(len(oldPos)) {
+		return 0, false, nil // too many at once → full projection
+	}
+
+	oldV := make([][]float32, len(oldIdx))
+	oldP := make([]mapPoint, len(oldIdx))
+	for k, i := range oldIdx {
+		id := ids[i]
+		oldV[k] = X[i]
+		oldP[k] = mapPoint{ID: id, X: oldPos[id].X, Y: oldPos[id].Y}
+	}
+
+	results := make([]mapPoint, len(newIdx))
+	workers := runtime.GOMAXPROCS(0)
+	if workers > len(newIdx) {
+		workers = len(newIdx)
+	}
+	sem := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+	for j, i := range newIdx {
+		wg.Add(1)
+		go func(j, i int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			results[j] = anchorPoint(ids[i], X[i], oldV, oldP)
+		}(j, i)
+	}
+	wg.Wait()
+
+	points := make([]mapPoint, 0, len(ids))
+	points = append(points, oldP...)
+	points = append(points, results...)
+	if err := storePositions(a.db, points, model, fp); err != nil {
+		return 0, false, err
+	}
+	return len(newIdx), true, nil
+}
+
+// anchorNeighbors is the k used for the neighbor graph of one anchored point.
+const anchorNeighbors = 15
+
+// anchorPoint places v at the inverse-distance-weighted centroid of its k
+// nearest already-projected points, plus a small deterministic jitter (scaled
+// to the local neighborhood spread) so near-duplicates do not overlap exactly.
+func anchorPoint(id int64, v []float32, old [][]float32, pos []mapPoint) mapPoint {
+	k := anchorNeighbors
+	if k > len(old) {
+		k = len(old)
+	}
+
+	type di struct {
+		d float64
+		i int
+	}
+	ds := make([]di, 0, len(old))
+	for i, o := range old {
+		var d2 float64
+		for j := range v {
+			delta := float64(v[j]) - float64(o[j])
+			d2 += delta * delta
+		}
+		ds = append(ds, di{math.Sqrt(d2), i})
+	}
+	sort.Slice(ds, func(a, b int) bool { return ds[a].d < ds[b].d })
+	if len(ds) > k {
+		ds = ds[:k]
+	}
+
+	var wx, wy, ws float64
+	for _, t := range ds {
+		w := 1.0 / (t.d + 1e-3)
+		wx += w * pos[t.i].X
+		wy += w * pos[t.i].Y
+		ws += w
+	}
+	x, y := wx/ws, wy/ws
+
+	// Jitter-Radius: relativ zur 2D-Distanz des nächstgelegenen Nachbarn
+	// (robust gegen Ausreißer in weiten Regionen), damit fast identische
+	// Einträge nicht exakt übereinanderliegen.
+	dmin := math.Inf(1)
+	for _, t := range ds {
+		if d := math.Hypot(pos[t.i].X-x, pos[t.i].Y-y); d < dmin {
+			dmin = d
+		}
+	}
+	rng := rand.New(rand.NewSource(id))
+	angle := rng.Float64() * 2 * math.Pi
+	radius := 0.25*dmin + 1e-3
+	return mapPoint{ID: id, X: x + radius*math.Cos(angle), Y: y + radius*math.Sin(angle)}
 }
 
 // fetchEmbedTexts returns id → embedding text for a batch of ids.

@@ -96,6 +96,31 @@ func loadCachedPositions(db *sql.DB, fingerprint string) (map[int64]mapPoint, bo
 	return out, true, nil
 }
 
+// loadAllStoredPositions returns the currently stored position set regardless
+// of its fingerprint. The table always holds exactly one set (storePositions
+// rewrites it fully), so this is the "existing layout" to anchor new points
+// onto incrementally.
+func loadAllStoredPositions(db *sql.DB) (map[int64]mapPoint, error) {
+	rows, err := db.Query(`SELECT id, x, y FROM map_positions`)
+	if err != nil {
+		return nil, fmt.Errorf("load stored positions: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64]mapPoint)
+	for rows.Next() {
+		var p mapPoint
+		if err := rows.Scan(&p.ID, &p.X, &p.Y); err != nil {
+			return nil, fmt.Errorf("scan stored positions: %w", err)
+		}
+		out[p.ID] = p
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate stored positions: %w", err)
+	}
+	return out, nil
+}
+
 // storePositions replaces the position cache with the new projection.
 func storePositions(db *sql.DB, points []mapPoint, model, fingerprint string) error {
 	tx, err := db.Begin()

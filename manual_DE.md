@@ -152,6 +152,8 @@ Jeder Eintrag wird per Embedding-Vektor auf einer interaktiven 2D-Karte position
 - Ohne konfiguriertes Modell läuft ein lokaler Hash-Embedder (offline, sofort, rein lexikalische Qualität)
 - Mit `EMBEDDING_BASE_URL` + `EMBEDDING_MODEL` (z.B. llama.cpp mit Qwen3-Embedding-GGUF) entstehen echte semantische Vektoren. Der Backfill startet nie automatisch – im Karten-Overlay erscheint **„Jetzt einbetten"**, oder `POST /api/map/embeddings`
 - Fortschritt erscheint als Progress-Overlay; die Karte lädt danach automatisch neu
+- Solange Punkte ohne Vektor existieren, steht in der Karten-Toolbar der Button **🚀 N** (N = Anzahl). Klick = fehlende Vektoren einbetten und platzieren; **Shift+Klick** = komplette UMAP über alle Vektoren neu berechnen
+- Kleine Nachschübe werden **inkrementell** platziert: nur die neuen Vektoren werden eingebettet, dann als gewichteter Zentroid ihrer 15 nächsten projizierten Nachbarn angehängt (Sekunden statt Minuten). Bestehende Punkte behalten exakt ihre Positionen. Große Batches (mehr als max(25, 2 % der vorhandenen Punkte)) oder `?force=true` berechnen die UMAP vollständig neu
 - 2D-Positionen werden in der Tabelle `map_positions` gecacht → Neustarts sind instant
 
 ---
@@ -207,7 +209,7 @@ Jeder Eintrag wird per Embedding-Vektor auf einer interaktiven 2D-Karte position
 | GET | `/api/feed/unread?id=X` | Set read=0 (als ungelesen markieren) |
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
 | GET | `/api/map` | Themenkarte: Status, Zähler und alle 2D-Punkte (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
-| POST | `/api/map/embeddings` | Startet Embedding+Projektion im Hintergrund (`?force=true` = alle Vektoren neu) – gibt sofort `202` zurück |
+| POST | `/api/map/embeddings` | Startet Embedding fehlender Punkte + Platzierung im Hintergrund (kleine Batches inkrementell; `?force=true` = alle Vektoren neu per voller UMAP) – gibt sofort `202` zurück |
 | GET | `/api/map/status` | Fortschritt des Karten-Jobs (`job.phase`, `job.done`, `job.total`, `job.pct`) |
 | POST | `/api/map/query` | Semantische Suche über die Kartenvektoren (`{"query":"..."}` → Top-300 mit Kosinus-Scores) |
 | GET/POST | `/api/search` | **RAG-Suche für KI-Tools:** `?q=...&limit=5&mode=semantic\|text[&date_from=&date_to=&with_content=true]` – POST mit JSON-Body `{"query","limit","mode","date_from","date_to","with_content"}`. Liefert Titel/Zusammenfassung/URL/Score der besten Treffer |
