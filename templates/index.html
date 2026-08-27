@@ -1861,6 +1861,7 @@ const translations = {
         map_to: 'Bis',
         map_points: 'Punkte',
         map_missing_vecs: 'ohne Vektor',
+        map_embed_missing: 'Neue Punkte ohne Vektor einbetten und Karte aktualisieren',
         map_hint: 'Scrollen = Zoom · Ziehen = Verschieben · Punkt anklicken = Artikel öffnen',
         map_embedding: 'Einbettungen werden erstellt …',
         map_projecting: 'Karte wird berechnet (t-SNE) …',
@@ -1913,6 +1914,7 @@ const translations = {
         map_to: 'To',
         map_points: 'points',
         map_missing_vecs: 'without vector',
+        map_embed_missing: 'Embed new points without vectors and refresh the map',
         map_hint: 'Scroll = zoom · drag = pan · click a point to open the article',
         map_embedding: 'Creating embeddings …',
         map_projecting: 'Computing map layout (t-SNE) …',
@@ -2304,6 +2306,7 @@ function renderMapShell() {
                 <span style="flex:1;"></span>
                 <span class="map-stats-line" id="mwHits"></span>
                 <button class="map-legend-chip" id="mapFocusBtn" style="display:none;">🎯 ${__('map_focus_hits')}</button>
+                <button class="map-legend-chip" id="mwEmbed" style="display:none;" title="${__('map_embed_missing')}">🚀 <span id="mwEmbedCount"></span></button>
                 <button class="btn-icon header-btn-map" id="mwDraw" title="${__('rg_draw')}">✏️</button>
             </div>
             <div class="map-legend" id="mapLegend"></div>
@@ -2326,6 +2329,14 @@ function renderMapShell() {
 
     // Suche/Datum/Semantik kommen aus der gemeinsamen Kopfzeile.
     document.getElementById('mapFocusBtn').addEventListener('click', focusMapHits);
+    document.getElementById('mwEmbed').addEventListener('click', async () => {
+        const b = document.getElementById('mwEmbed');
+        b.disabled = true;
+        try { await fetch('/api/map/embeddings', { method: 'POST' }); } catch (e) { b.disabled = false; return; }
+        updateMapEmbedBtn('waiting');
+        handleMapStatus('waiting');
+        startMapPoll();
+    });
     document.getElementById('mwSize').addEventListener('change', (e) => {
         mapWindowDays = parseInt(e.target.value, 10) || 0;
         mapWindowStopPlay();
@@ -2371,6 +2382,21 @@ function updateMapStatsLine() {
         ? `<span style="color:#60a5fa;">${mapState.hitsInfo}</span>` : '';
 }
 
+// Toolbar-Button "🚀 N": erscheint, wenn die fertige Karte Punkte ohne Vektor
+// hat (API-Mode bettet nie implizit ein) und startet die Pipeline explizit.
+function updateMapEmbedBtn(status) {
+    const b = document.getElementById('mwEmbed');
+    if (!b) return;
+    const missing = (mapState.counts && mapState.counts.missing) || 0;
+    const show = status === 'ready' && missing > 0;
+    b.style.display = show ? '' : 'none';
+    b.disabled = false;
+    if (show) {
+        const c = document.getElementById('mwEmbedCount');
+        if (c) c.textContent = missing;
+    }
+}
+
 async function loadMapData() {
     try {
         const d = await api('/api/map');
@@ -2397,6 +2423,7 @@ function handleMapStatus(status, message) {
     const existing = document.getElementById('mapStatusCard');
     if (existing) existing.remove();
     stopMapPoll();
+    updateMapEmbedBtn(status);
 
     if (status === 'ready') return;
 
