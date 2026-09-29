@@ -138,6 +138,7 @@ func setupHTTPServer(app *App, listenPort int, cfg Config) *http.Server {
 	mux.HandleFunc("/api/links", app.handleAPI)
 	mux.HandleFunc("/api/links/rescrape", app.handleAPI)
 	mux.HandleFunc("/api/links/resummarize", app.handleAPI)
+	mux.HandleFunc("/api/prompts", app.handleAPI)
 	mux.HandleFunc("/api/categories", app.handleAPI)
 	mux.HandleFunc("/api/share", app.handleAPI)
 	mux.HandleFunc("/linkshare", app.handleAPI)

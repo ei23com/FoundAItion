@@ -219,3 +219,27 @@ func TestResummarizeKeepsSummaryOnLLMError(t *testing.T) {
 		t.Fatalf("Zusammenfassung wurde bei Fehler verändert: %q", summary)
 	}
 }
+
+// Eine leere Modellantwort darf die vorhandene Zusammenfassung nicht löschen
+// (im Live-Test lieferte das Modell bei einem unpassenden Prompt "" zurück).
+func TestResummarizeKeepsSummaryOnEmptyModelAnswer(t *testing.T) {
+	app := testAppWithDB(t, llmConfig(fakeLLM(t, "   ")))
+	id := insertTestLink(t, app, "https://example.org/a", "Titel", "Inhalt")
+	if _, err := app.db.Exec(fmt.Sprintf(`UPDATE %s SET "summary" = ? WHERE "id" = ?`, TableName), "alte Zusammenfassung", id); err != nil {
+		t.Fatalf("summary setzen: %v", err)
+	}
+
+	rec := resummarizeRequest(app, id, http.MethodPost)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("Status %d, erwartet 502 (Body: %s)", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "keine Zusammenfassung") {
+		t.Fatalf("Meldung unklar: %s", rec.Body.String())
+	}
+
+	var summary string
+	app.db.QueryRow(fmt.Sprintf(`SELECT "summary" FROM %s WHERE "id" = ?`, TableName), id).Scan(&summary)
+	if summary != "alte Zusammenfassung" {
+		t.Fatalf("Zusammenfassung wurde geleert: %q", summary)
+	}
+}

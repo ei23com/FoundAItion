@@ -821,6 +821,29 @@
 
 
 
+        .prompt-hint {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.35rem;
+            margin-top: 0.4rem;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+        .prompt-chip {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 999px;
+            padding: 0.1rem 0.55rem;
+            font-size: 0.75rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: border-color 0.15s, color 0.15s;
+        }
+        .prompt-chip:hover { border-color: #a78bfa; color: #a78bfa; }
+        .prompt-chip.active { border-color: #a78bfa; color: #a78bfa; }
+
         .edit-divider {
             border: none;
             border-top: 1px solid var(--border);
@@ -1827,6 +1850,7 @@ const translations = {
         detail_content_label: 'Rohinhalt',
         detail_save:  'Speichern',
         detail_note_label: 'Notiz',
+        detail_prompt_hint: 'Prompt-Template (Name in die Notiz eintragen, dann speichern):',
         detail_tab_summary: 'Zusammenfassung',
         detail_tab_content: 'Originaltext',
         detail_no_content: 'Kein Rohinhalt verf\u00fcgbar',
@@ -2006,6 +2030,7 @@ const translations = {
         detail_content_label: 'Raw content',
         detail_save:  'Save',
         detail_note_label: 'Note',
+        detail_prompt_hint: 'Prompt template (put the name in the note, then save):',
         detail_tab_summary: 'Summary',
         detail_tab_content: 'Original text',
         detail_no_content: 'No raw content available',
@@ -3536,6 +3561,7 @@ function renderDetail(link) {
 
                     <label for="editNotiz">📝 ${__('detail_note_label')}</label>
                     <textarea class="edit-textarea" id="editNotiz" placeholder="${__('detail_note_label')} (optional)">${esc(link.note || '')}</textarea>
+                    <div class="prompt-hint" id="promptHint"></div>
 
                     <label for="editCategory">🏷️ Kategorie</label>
                     <input type="text" class="edit-input" id="editCategory" value="${esc(link.category || '')}" placeholder="Kategorie (optional)" />
@@ -3677,6 +3703,28 @@ function renderDetail(link) {
                 btnRescrape.disabled = false;
                 btnRescrape.innerHTML = label;
             }
+        });
+    }
+
+    // ── Prompt-Templates als Vorschläge (Notiz) ─────────────────────────────
+    const promptHint = document.getElementById('promptHint');
+    if (promptHint) {
+        loadPromptNames().then(names => {
+            if (!names.length) { promptHint.style.display = 'none'; return; }
+            promptHint.innerHTML = `<span>${__('detail_prompt_hint')}</span>` +
+                names.map(n => `<button type="button" class="prompt-chip" data-name="${esc(n)}">${esc(n)}</button>`).join('');
+        });
+        // Klick übernimmt den Namen in die Notiz (mehrfacher Klick entfernt ihn wieder).
+        promptHint.addEventListener('click', (e) => {
+            const chip = e.target.closest('.prompt-chip');
+            const ta = document.getElementById('editNotiz');
+            if (!chip || !ta) return;
+            const name = chip.dataset.name;
+            const parts = ta.value.split(/[\s,;]+/).filter(Boolean);
+            const idx = parts.findIndex(p => p.toLowerCase() === name.toLowerCase());
+            if (idx >= 0) { parts.splice(idx, 1); } else { parts.push(name); }
+            ta.value = parts.join(' ');
+            chip.classList.toggle('active', idx < 0);
         });
     }
 
@@ -3997,6 +4045,21 @@ async function processEntries() {
 
     btn.disabled = false;
     btn.title = 'Zusammenfassungen erstellen';
+}
+
+// ── Prompt-Templates (Namen aus dem prompts/-Ordner) ──────
+let promptNamesCache = null;
+async function loadPromptNames() {
+    if (promptNamesCache) return promptNamesCache;
+    try {
+        const r = await fetch('/api/prompts');
+        if (!r.ok) return [];
+        const data = await r.json();
+        promptNamesCache = data.prompts || [];
+    } catch (e) {
+        return [];
+    }
+    return promptNamesCache;
 }
 
 // ── Progress Overlay Helpers ───────────────────────────────

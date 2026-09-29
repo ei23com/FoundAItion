@@ -244,7 +244,8 @@ map can then use it. Options: `--out DIR`, `--manual` (human subtitles only), `-
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
 | GET | `/api/map` | Topic map: status, counters and all 2D points (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
 | POST | `/api/links/rescrape?id=N` | Reloads only an entry's content (crawl the page / fetch subtitles); the summary stays unchanged. Fills in an empty title |
-| POST | `/api/links/resummarize?id=N` | Regenerates the summary from the current content (replaces the existing text); fetches the content first if it is missing |
+| POST | `/api/links/resummarize?id=N` | Regenerates the summary from the current content (replaces the existing text); fetches the content first if it is missing. Uses the prompt template named in the note |
+| GET | `/api/prompts` | List of available prompt templates (filenames without `.md`) for the note-based selection |
 | POST | `/api/map/embeddings` | Start background embedding+projection (`?force=true` = recompute all vectors) – returns `202` immediately |
 | GET | `/api/map/status` | Progress of the map job (`job.phase`, `job.done`, `job.total`, `job.pct`) |
 | POST | `/api/map/query` | Semantic search over the map vectors (`{"query":"..."}` → top 300 with cosine scores) |
@@ -252,19 +253,55 @@ map can then use it. Options: `--out DIR`, `--manual` (human subtitles only), `-
 
 ---
 
-## Prompts
+## Prompts (custom prompts via the note)
 
-Prompt templates are stored in the `prompts/` directory and loaded by language:
+Prompt templates live in the `prompts/` directory. The **filename without `.md`** is the
+template name:
 
 ```
 prompts/
-├── summary_DE.md        # Summary (German)
-├── summary_EN.md        # Summary (English)
+├── summary_DE.md        # Summary (German)      ← default with UI_LANGUAGE=de
+├── summary_EN.md        # Summary (English)     ← default with UI_LANGUAGE=en
 ├── chapters_DE.md       # Chapters (German)
-└── chapters_EN.md       # Chapters (English)
+├── chapters_EN.md       # Chapters (English)
+├── categorize_DE.md     # Categorization (German)
+├── categorize_EN.md     # Categorization (English)
+└── custom_prompt.md     # example custom prompt
 ```
 
-The app selects the template based on the current `UI_LANGUAGE`.
+### Selection via the note
+
+If an entry's **note** contains the name of a template, that template is used for the
+summary – e.g. `custom_prompt` or `chapters_EN`.
+
+| Note | Template used |
+|------|---------------|
+| `custom_prompt` | `custom_prompt.md` |
+| `chapters_EN` | `chapters_EN.md` (English chapters even with a German UI) |
+| `please use custom_prompt` | `custom_prompt.md` (name anywhere in the note) |
+| *(no note)* | `summary_DE.md` or `summary_EN.md` depending on `UI_LANGUAGE` |
+| `unknown_name` | `summary_DE.md` / `summary_EN.md` (fallback) |
+| `kapitel` / `chapters` | `chapters_DE.md` / `chapters_EN.md` (legacy keyword) |
+
+Rules:
+
+- Casing does not matter as long as the name is unambiguous (`chapters_en` → `chapters_EN`).
+- Templates **with** a language suffix (`…_DE`, `…_EN`) are used as given, regardless of `UI_LANGUAGE`.
+- Templates **without** a suffix (`custom_prompt`) prefer `custom_prompt_DE.md` or
+  `custom_prompt_EN.md` if those files exist – otherwise `custom_prompt.md`.
+- **Categorization** always uses `categorize_DE.md` / `categorize_EN.md`.
+
+### Creating your own template
+
+1. Add a new file to `prompts/`, e.g. `my_prompt.md`.
+2. Write the prompt; `{{CONTENT}}` is replaced with the entry's content
+   (`{{CATEGORIES}}` in the categorization prompts expands to the category list).
+3. Put `my_prompt` in the entry's **note** and save.
+4. Apply it via **🧠 Regenerate summary** (detail view) – or on the next batch run.
+
+Use `prompts/custom_prompt.md` as a starting point. In the detail view the app lists all
+available template names below the note field as clickable suggestions
+(endpoint `GET /api/prompts`); a click inserts the name into the note.
 
 ---
 
@@ -283,10 +320,10 @@ The app selects the template based on the current `UI_LANGUAGE`.
 ├── db.go                # SQLite connection + table creation
 ├── go.mod / go.sum      # Dependencies
 ├── prompts/
-│   ├── summary_DE.md
-│   ├── summary_EN.md
-│   ├── chapters_DE.md
-│   └── chapters_EN.md
+│   ├── summary_DE.md / summary_EN.md
+│   ├── chapters_DE.md / chapters_EN.md
+│   ├── categorize_DE.md / categorize_EN.md
+│   └── custom_prompt.md   # example custom prompt
 ├── templates/
 │   └── index.html       # Frontend: HTML/CSS/JS (bilingual)
 ├── .env                 # Configuration (auto-created)

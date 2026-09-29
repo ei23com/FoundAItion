@@ -173,7 +173,7 @@ func (a *App) resummarizeLink(w http.ResponseWriter, r *http.Request) {
 	}
 	resp.ContentChars = len(content)
 
-	summary, serr := a.generateSummary(content, resolvePrompt(link.Note), a.cfg.UILanguage)
+	summary, serr := a.generateSummary(content, a.resolvePromptName(link.Note), a.cfg.UILanguage)
 	if serr != nil {
 		if strings.Contains(serr.Error(), ErrTooLong) {
 			// Wie in der Pipeline: Platzhalter setzen, damit der Eintrag nicht hängen bleibt.
@@ -192,6 +192,13 @@ func (a *App) resummarizeLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Eine leere Modellantwort darf die vorhandene Zusammenfassung nicht löschen.
+	if strings.TrimSpace(summary) == "" {
+		log.Printf("[resummarize] id=%d model returned empty summary – keeping existing text", id)
+		writeJSONError(w, http.StatusBadGateway, "Das Modell hat keine Zusammenfassung geliefert – der vorhandene Text bleibt erhalten")
+		return
+	}
+
 	if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "summary" = ? WHERE "id" = ?`, TableName), summary, id); uerr != nil {
 		log.Printf("[resummarize] id=%d summary update failed: %v", id, uerr)
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Zusammenfassung nicht gespeichert: %v", uerr))
@@ -202,6 +209,13 @@ func (a *App) resummarizeLink(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[resummarize] id=%d summary regenerated (%d chars from %d chars content)", id, len(summary), len(content))
 
 	writeJSON(w, resp)
+}
+
+// getPrompts behandelt GET /api/prompts und liefert die verfügbaren
+// Prompt-Templates (Dateinamen ohne ".md"). Die Detailansicht zeigt sie als
+// Vorschläge für die Notiz an.
+func (a *App) getPrompts(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]any{"prompts": a.promptNames()})
 }
 
 // ─── Helfer ──────────────────────────────────────────────────────────────────

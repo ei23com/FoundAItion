@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -27,8 +28,8 @@ type App struct {
 	cfg      Config
 	prompts  map[string]string // template name → content (summary_EN, summary_DE, chapters_DE, …)
 	progress ProcessingState
-	mu       sync.Mutex   // protects receiveLink from parallel duplicates
-	llmMu    sync.Mutex   // serializes ALL llm/embedding calls (local models: only one can be loaded at a time)
+	mu       sync.Mutex  // protects receiveLink from parallel duplicates
+	llmMu    sync.Mutex  // serializes ALL llm/embedding calls (local models: only one can be loaded at a time)
 	mapJob   mapJobState // vectormap background job (embedding + projection)
 }
 
@@ -90,6 +91,17 @@ func loadPrompts(dir string) map[string]string {
 		log.Printf("WARN: no .md files found in prompts dir")
 	}
 	return prompts
+}
+
+// promptNames liefert die Namen aller geladenen Prompt-Templates, alphabetisch
+// sortiert (z. B. "chapters_EN", "custom_prompt", "summary_DE").
+func (a *App) promptNames() []string {
+	names := make([]string, 0, len(a.prompts))
+	for name := range a.prompts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // renderPrompt replaces the {{CONTENT}} placeholder in a named template.

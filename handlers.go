@@ -31,6 +31,8 @@ func (a *App) handleAPI(w http.ResponseWriter, r *http.Request) {
 		a.rescrapeLink(w, r)
 	case "/api/links/resummarize":
 		a.resummarizeLink(w, r)
+	case "/api/prompts":
+		a.getPrompts(w, r)
 	case "/api/categories":
 		a.getCategories(w, r)
 	case "/api/share":
@@ -603,7 +605,7 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 			a.llmMu.Lock()
 			defer a.llmMu.Unlock()
 			lang := a.cfg.UILanguage
-			promptName := resolvePrompt(req.Note)
+			promptName := a.resolvePromptName(req.Note)
 			summary, err := a.generateSummary(c, promptName, lang)
 			if err != nil {
 				if strings.Contains(err.Error(), ErrTooLong) {
@@ -976,7 +978,7 @@ func (a *App) processPhase2Summarize(pending []Link, prog *ProcessingState) phas
 			continue
 		}
 
-		promptName := resolvePrompt(link.Note)
+		promptName := a.resolvePromptName(link.Note)
 		summary, err := a.generateSummary(content, promptName, lang)
 		if err != nil {
 			if strings.Contains(err.Error(), ErrTooLong) {
@@ -1036,7 +1038,19 @@ func (a *App) resolveContent(link Link) string {
 
 // ─── Prompt Resolution ──────────────────────────────────────────────────────
 
-func resolvePrompt(note string) string {
+// resolvePromptName bestimmt das Prompt-Template für einen Eintrag.
+//
+//  1. Enthält die Notiz den Namen eines vorhandenen Templates (z. B.
+//     "chapters_EN" oder "custom_prompt"), wird genau dieses verwendet.
+//  2. Sonst greifen die bekannten Schlüsselwörter (Kapitel/chapters → chapters,
+//     Kategorie/categorize → categorize).
+//  3. Sonst "summary": renderPrompt wählt dann summary_DE bzw. summary_EN
+//     passend zur eingestellten Sprache.
+func (a *App) resolvePromptName(note string) string {
+	if name := a.promptFromNote(note); name != "" {
+		return name
+	}
+
 	lower := strings.ToLower(note)
 	if strings.Contains(lower, "kapitel") || strings.Contains(lower, "chapters") || strings.Contains(lower, "chapter") {
 		return "chapters"
@@ -1045,6 +1059,49 @@ func resolvePrompt(note string) string {
 		return "categorize"
 	}
 	return "summary"
+}
+
+// promptFromNote sucht in der Notiz den Namen eines vorhandenen Templates.
+// Geprüft wird zuerst die komplette Notiz, dann einzelne Wörter (getrennt durch
+// Leerzeichen, Komma, Semikolon, Zeilenumbruch, Schrägstrich …). Die
+// Schreibweise darf abweichen, solange der Name eindeutig ist.
+func (a *App) promptFromNote(note string) string {
+	note = strings.TrimSpace(note)
+	if note == "" || len(a.prompts) == 0 {
+		return ""
+	}
+
+	candidates := append([]string{note}, strings.FieldsFunc(note, func(r rune) bool {
+		switch r {
+		case ' ', '\t', '\n', '\r', ',', ';', '/', '|', '+', '(', ')', '[', ']', ':', '\'':
+			return true
+		}
+		return false
+	})...)
+
+	// Erster Durchlauf: exakte Schreibweise.
+	for _, cand := range candidates {
+		cand = strings.TrimSpace(cand)
+		if cand == "" {
+			continue
+		}
+		if _, ok := a.prompts[cand]; ok {
+			return cand
+		}
+	}
+	// Zweiter Durchlauf: Schreibweise egal (Namen sind sortiert → deterministisch).
+	for _, cand := range candidates {
+		cand = strings.TrimSpace(cand)
+		if cand == "" {
+			continue
+		}
+		for _, name := range a.promptNames() {
+			if strings.EqualFold(name, cand) {
+				return name
+			}
+		}
+	}
+	return ""
 }
 
 func shouldSkipProcessing(note string) bool {
@@ -1560,8 +1617,6 @@ func (a *App) handleRSS(w http.ResponseWriter, r *http.Request) {
 			}
 			buf.WriteString("</small></p>")
 		}
-
-
 
 		buf.WriteString("]]>\n")
 		buf.WriteString("    </content>\n")

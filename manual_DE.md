@@ -246,7 +246,8 @@ Zusammenfassung und Themenkarte es nutzen. Optionen: `--out DIR`, `--manual` (nu
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
 | GET | `/api/map` | Themenkarte: Status, Zähler und alle 2D-Punkte (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
 | POST | `/api/links/rescrape?id=N` | Lädt nur den Inhalt eines Eintrags neu (Webseite crawlen bzw. Untertitel holen); die Zusammenfassung bleibt unverändert. Ergänzt einen leeren Titel |
-| POST | `/api/links/resummarize?id=N` | Erstellt die Zusammenfassung aus dem aktuellen Inhalt neu (ersetzt den vorhandenen Text); fehlt der Inhalt, wird er zuvor geladen |
+| POST | `/api/links/resummarize?id=N` | Erstellt die Zusammenfassung aus dem aktuellen Inhalt neu (ersetzt den vorhandenen Text); fehlt der Inhalt, wird er zuvor geladen. Nutzt das Prompt-Template aus der Notiz |
+| GET | `/api/prompts` | Liste der verfügbaren Prompt-Templates (Dateinamen ohne `.md`) für die Notiz-Auswahl |
 | POST | `/api/map/embeddings` | Startet Embedding fehlender Punkte + Platzierung im Hintergrund (kleine Batches inkrementell; `?force=true` = alle Vektoren neu per voller UMAP) – gibt sofort `202` zurück |
 | GET | `/api/map/status` | Fortschritt des Karten-Jobs (`job.phase`, `job.done`, `job.total`, `job.pct`) |
 | POST | `/api/map/query` | Semantische Suche über die Kartenvektoren (`{"query":"..."}` → Top-300 mit Kosinus-Scores) |
@@ -254,19 +255,56 @@ Zusammenfassung und Themenkarte es nutzen. Optionen: `--out DIR`, `--manual` (nu
 
 ---
 
-## Prompts
+## Prompts (eigene Prompts per Notiz)
 
-Die Prompt-Templates liegen im `prompts/`-Verzeichnis und werden sprachspezifisch geladen:
+Die Prompt-Templates liegen im `prompts/`-Verzeichnis. Der **Dateiname ohne `.md`** ist der
+Name des Templates:
 
 ```
 prompts/
-├── summary_DE.md        # Zusammenfassung (Deutsch)
-├── summary_EN.md        # Summary (English)
+├── summary_DE.md        # Zusammenfassung (Deutsch)      ← Standard bei UI_LANGUAGE=de
+├── summary_EN.md        # Summary (English)              ← Standard bei UI_LANGUAGE=en
 ├── chapters_DE.md       # Kapitel-Übersicht (Deutsch)
-└── chapters_EN.md       # Chapter overview (English)
+├── chapters_EN.md       # Chapter overview (English)
+├── categorize_DE.md     # Kategorisierung (Deutsch)
+├── categorize_EN.md     # Kategorisierung (English)
+└── custom_prompt.md     # Beispiel für einen eigenen Prompt
 ```
 
-Die App wählt das Template basierend auf der aktuellen `UI_LANGUAGE` aus.
+### Auswahl über die Notiz
+
+Steht in der **Notiz** eines Eintrags der Name eines Templates, wird genau dieses Template
+für die Zusammenfassung verwendet – z. B. `custom_prompt` oder `chapters_EN`.
+
+| Notiz | Verwendetes Template |
+|-------|----------------------|
+| `custom_prompt` | `custom_prompt.md` |
+| `chapters_EN` | `chapters_EN.md` (englische Kapitel, auch bei deutscher Oberfläche) |
+| `Bitte custom_prompt verwenden` | `custom_prompt.md` (Name irgendwo in der Notiz) |
+| *(keine Notiz)* | `summary_DE.md` bzw. `summary_EN.md` je nach `UI_LANGUAGE` |
+| `unbekannter_name` | `summary_DE.md` bzw. `summary_EN.md` (Fallback) |
+| `kapitel` / `chapters` | `chapters_DE.md` bzw. `chapters_EN.md` (bisheriges Schlüsselwort) |
+
+Regeln:
+
+- Groß-/Kleinschreibung ist egal, solange der Name eindeutig ist (`chapters_en` → `chapters_EN`).
+- Templates **mit** Sprachsuffix (`…_DE`, `…_EN`) werden unverändert genutzt, unabhängig von `UI_LANGUAGE`.
+- Templates **ohne** Sprachsuffix (`custom_prompt`) nutzen `custom_prompt_DE.md` bzw.
+  `custom_prompt_EN.md`, falls diese Dateien existieren – sonst `custom_prompt.md`.
+- Die **Kategorisierung** verwendet immer `categorize_DE.md` / `categorize_EN.md`.
+
+### Eigenes Template anlegen
+
+1. Neue Datei im Ordner `prompts/` anlegen, z. B. `mein_prompt.md`.
+2. Text hineinschreiben; `{{CONTENT}}` wird durch den Inhalt des Eintrags ersetzt
+   (`{{CATEGORIES}}` steht in den Kategorisierungs-Prompts für die Kategorieliste).
+3. Beim Eintrag in die **Notiz** `mein_prompt` schreiben und speichern.
+4. Über **🧠 Zusammenfassung neu erstellen** (Detailansicht) anwenden – oder beim nächsten
+   Sammel-Lauf.
+
+Als Vorlage dient `prompts/custom_prompt.md`. In der Detailansicht zeigt die App unter dem
+Notizfeld alle verfügbaren Template-Namen als antippbare Vorschläge an
+(Endpunkt `GET /api/prompts`); ein Klick übernimmt den Namen in die Notiz.
 
 ---
 
@@ -285,10 +323,10 @@ Die App wählt das Template basierend auf der aktuellen `UI_LANGUAGE` aus.
 ├── db.go                # SQLite connection + table creation
 ├── go.mod / go.sum      # Dependencies
 ├── prompts/
-│   ├── summary_DE.md
-│   ├── summary_EN.md
-│   ├── chapters_DE.md
-│   └── chapters_EN.md
+│   ├── summary_DE.md / summary_EN.md
+│   ├── chapters_DE.md / chapters_EN.md
+│   ├── categorize_DE.md / categorize_EN.md
+│   └── custom_prompt.md   # Beispiel für eigene Prompts
 ├── templates/
 │   └── index.html       # Frontend: HTML/CSS/JS (bilingual)
 ├── .env                 # Configuration (auto-created)
