@@ -63,6 +63,10 @@ Articles, videos, or entire playlists land in FoundAItion with a single tap and 
 | **Whisper Server** | Local self-hosted Whisper for audio transcription |
 | **Colly + html-to-markdown** | Pure Go – web crawling, HTML → Markdown |
 
+> **Note on local models:** if the model server (e.g. llama-swap, Ollama) loads the model only on the
+> first request, a single call can take several minutes. The HTTP timeout for LLM calls is therefore
+> **at least 240 seconds** (`LLM_TIMEOUT`, see environment variables).
+
 The `links` table is **auto-created** on first run (`CREATE TABLE IF NOT EXISTS`).
 
 ### Schema (17 columns)
@@ -202,6 +206,7 @@ map can then use it. Options: `--out DIR`, `--manual` (human subtitles only), `-
 | `OPENAI_MODELS` | `gpt-4o-mini,gpt-4o` | Comma-separated available models |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible API endpoint |
 | `SUMMARY_MAX_TOKENS` | `64000` | Max tokens for summary content (×3.5 chars/token) |
+| `LLM_TIMEOUT` | `240` | HTTP timeout for LLM calls (summary + embeddings) in seconds. **Minimum 240 s**, because local model servers load a model on first call – lower values are raised to 240, higher values are allowed |
 | `AUTO_SUMMARIZE` | `true` | Auto-generate summary on link add |
 | `WHISPER_URL` | `http://localhost:8081` | Local Whisper server URL |
 | `WHISPER_MODEL` | `large-v3` | Whisper model |

@@ -115,6 +115,7 @@ func logStartupDiagnostics(cfg Config) {
 	if _, err := exec.LookPath(cfg.YTDLPPath); err != nil {
 		log.Printf("WARN: yt-dlp not found at %s – YouTube processing disabled", cfg.YTDLPPath)
 	}
+	log.Printf("LLM HTTP timeout: %v (Minimum %d s, LLM_TIMEOUT)", cfg.llmTimeout(), MinLLMTimeoutSec)
 	log.Printf("YouTube subtitle method: %s", cfg.YouTubeSubtitleMethod)
 	if cfg.WhisperURL != "" {
 		log.Printf("Whisper Server: %s (%s)", cfg.WhisperURL, cfg.WhisperModel)
@@ -127,6 +128,14 @@ func logStartupDiagnostics(cfg Config) {
 }
 
 // setupHTTPServer configures and starts the HTTP server.
+const (
+	serverReadTimeout = 300 * time.Second
+	// serverWriteTimeout muss länger als ein LLM-Aufruf sein: Das Laden eines
+	// lokalen Modells plus die Generierung kann mehrere Minuten dauern
+	// (siehe MinLLMTimeoutSec).
+	serverWriteTimeout = 900 * time.Second
+)
+
 func setupHTTPServer(app *App, listenPort int, cfg Config) *http.Server {
 	mux := http.NewServeMux()
 
@@ -181,8 +190,8 @@ func setupHTTPServer(app *App, listenPort int, cfg Config) *http.Server {
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      mux,
-		ReadTimeout:  300 * time.Second,
-		WriteTimeout: 300 * time.Second,
+		ReadTimeout:  serverReadTimeout,
+		WriteTimeout: serverWriteTimeout,
 	}
 
 	go func() {

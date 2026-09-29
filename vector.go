@@ -12,7 +12,6 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // ─── Vector Storage ──────────────────────────────────────────────────────────
@@ -184,8 +183,8 @@ func (a *App) embedText(text string) ([]float32, error) {
 // embedViaAPI calls the OpenAI-compatible /embeddings endpoint.
 func (a *App) embedViaAPI(text, model string) ([]float32, error) {
 	payload, err := json.Marshal(map[string]any{
-		"model":  model,
-		"input":  text,
+		"model": model,
+		"input": text,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
@@ -200,11 +199,14 @@ func (a *App) embedViaAPI(text, model string) ([]float32, error) {
 		req.Header.Set("Authorization", "Bearer "+a.cfg.EmbeddingAPIKey)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	// Mindestens MinLLMTimeoutSec: auch das Embedding-Modell wird erst beim
+	// ersten Aufruf geladen.
+	timeout := a.cfg.llmTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req = req.WithContext(ctx)
 
-	client := &http.Client{Timeout: 180 * time.Second}
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("embedding request %s: %w", a.cfg.EmbeddingBaseURL, err)

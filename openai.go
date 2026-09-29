@@ -137,7 +137,7 @@ func (a *App) generateSummaryWithModel(content, promptName, lang, model string) 
 	if lang == "en" {
 		systemPrompt = "You are a precise editor."
 		if promptName == "chapters" {
-		systemPrompt = "You are an experienced video analyst."
+			systemPrompt = "You are an experienced video analyst."
 		} else if promptName == "categorize" {
 			systemPrompt = "You are a precise categorizer. Respond with exactly one category."
 		}
@@ -164,7 +164,8 @@ func (a *App) generateSummaryWithModel(content, promptName, lang, model string) 
 
 	body, _ := json.Marshal(payload)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Mindestens MinLLMTimeoutSec: das Laden eines lokalen Modells kann dauern.
+	ctx, cancel := context.WithTimeout(context.Background(), a.cfg.llmTimeout())
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,

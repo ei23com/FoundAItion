@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ─── Application Configuration ───────────────────────────────────────────────
@@ -26,6 +27,7 @@ type Config struct {
 	YTDSubsDir            string // Output directory for the yt-sub helper tool
 	MaxProcessDays        int    // Max days backwards for processing (default: 14)
 	SummaryMaxTokens      int    // Maximum tokens for summary (default: 64000)
+	LLMTimeoutSec         int    // HTTP timeout for LLM calls; min. 240 s (model loading)
 	AutoSummarize         bool   // Auto-generate summary on add (default: true)
 	DBFile                string // SQLite file path (default: ./foundaition.db)
 	RssBaseURL            string // Base URL for RSS feed action links
@@ -81,6 +83,7 @@ func loadConfig() Config {
 		YTDSubsDir:            envOrDefault("YT_SUBS_DIR", filepath.Join(getBinaryDir(), "subs")),
 		MaxProcessDays:        envIntOrDefault("MAX_PROCESS_DAYS", 14),
 		SummaryMaxTokens:      maxTokens,
+		LLMTimeoutSec:         envIntOrDefault("LLM_TIMEOUT", MinLLMTimeoutSec),
 		AutoSummarize:         autoSummarize,
 		DBFile:                envOrDefault("DB_FILE", "./foundaition.db"),
 		RssBaseURL:            envOrDefault("RSS_BASE_URL", ""),
@@ -106,6 +109,22 @@ func (c *Config) resolveEmbeddingDefaults() {
 	if c.EmbeddingAPIKey == "" {
 		c.EmbeddingAPIKey = c.OpenAIKey
 	}
+}
+
+// MinLLMTimeoutSec ist die Untergrenze für LLM-HTTP-Aufrufe: lokale Modellserver
+// (z. B. llama-swap) laden ein Modell erst beim ersten Aufruf, das dauert
+// mitunter mehrere Minuten.
+const MinLLMTimeoutSec = 240
+
+// llmTimeout liefert das Zeitlimit für LLM-HTTP-Aufrufe (Chat und Embeddings).
+// Werte unter MinLLMTimeoutSec werden angehoben, damit das Laden eines Modells
+// nicht abgeschnitten wird.
+func (c *Config) llmTimeout() time.Duration {
+	sec := c.LLMTimeoutSec
+	if sec < MinLLMTimeoutSec {
+		sec = MinLLMTimeoutSec
+	}
+	return time.Duration(sec) * time.Second
 }
 
 // ActiveEmbeddingModel returns the model identifier used for all vectors in
