@@ -128,6 +128,7 @@ Dann `http://localhost:8080` im Browser öffnen. Port über `LISTEN_PORT=9000` �
   - 📋 URL kopieren
   - 📝 Zusammenfassung als Markdown kopieren
   - ↗️ Im Browser öffnen
+- 🔃 **Inhalt & Zusammenfassung neu laden** (im Editierbereich, neben „Zusammenfassung zurücksetzen"): crawlt die Webseite erneut bzw. lädt die Untertitel neu (Englisch/Deutsch) und erstellt die Zusammenfassung neu – damit lassen sich alte Einträge korrigieren, deren Inhalt z. B. in der falschen Sprache geladen wurde. Der Vorgang läuft mit Fortschrittsanzeige; ein vorhandener Titel wird nie überschrieben
 - 🗑️ **Eintrag löschen** (mit Bestätigungsdialog)
 
 ### Sprachumschaltung
@@ -243,6 +244,7 @@ Zusammenfassung und Themenkarte es nutzen. Optionen: `--out DIR`, `--manual` (nu
 | GET | `/api/feed/unread?id=X` | Set read=0 (als ungelesen markieren) |
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
 | GET | `/api/map` | Themenkarte: Status, Zähler und alle 2D-Punkte (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
+| POST | `/api/links/rescrape?id=N[&summary=0]` | Lädt den Inhalt eines Eintrags neu (Webseite crawlen bzw. Untertitel holen) und erstellt die Zusammenfassung neu; `summary=0` lässt die Zusammenfassung unverändert |
 | POST | `/api/map/embeddings` | Startet Embedding fehlender Punkte + Platzierung im Hintergrund (kleine Batches inkrementell; `?force=true` = alle Vektoren neu per voller UMAP) – gibt sofort `202` zurück |
 | GET | `/api/map/status` | Fortschritt des Karten-Jobs (`job.phase`, `job.done`, `job.total`, `job.pct`) |
 | POST | `/api/map/query` | Semantische Suche über die Kartenvektoren (`{"query":"..."}` → Top-300 mit Kosinus-Scores) |

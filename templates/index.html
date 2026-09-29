@@ -1814,6 +1814,12 @@ const translations = {
         detail_edit:  'Details bearbeiten',
         detail_close_edit: 'Schlie\u00dfen',
         detail_clear_summary: 'Zusammenfassung zur\u00fccksetzen',
+        detail_rescrape: 'Inhalt & Zusammenfassung neu laden',
+        detail_rescrape_hint: 'Webseite erneut crawlen bzw. Untertitel neu laden (Englisch/Deutsch) und die Zusammenfassung neu erstellen \u2013 z. B. um alte Eintr\u00e4ge zu korrigieren.',
+        confirm_rescrape: 'Inhalt und Zusammenfassung dieses Eintrags neu laden?',
+        toast_rescraped: 'Inhalt neu geladen',
+        toast_rescrape_web: 'Webseite',
+        toast_rescrape_yt: 'Untertitel',
         detail_title_label: 'Titel',
         detail_content_label: 'Rohinhalt',
         detail_save:  'Speichern',
@@ -1984,6 +1990,12 @@ const translations = {
         detail_edit:  'Edit details',
         detail_close_edit: 'Close',
         detail_clear_summary: 'Reset summary',
+        detail_rescrape: 'Reload content & summary',
+        detail_rescrape_hint: 'Re-crawl the web page or reload the subtitles (English/German) and regenerate the summary \u2013 e.g. to fix older entries.',
+        confirm_rescrape: 'Reload content and summary for this entry?',
+        toast_rescraped: 'Content reloaded',
+        toast_rescrape_web: 'web page',
+        toast_rescrape_yt: 'subtitles',
         detail_title_label: 'Title',
         detail_content_label: 'Raw content',
         detail_save:  'Save',
@@ -3529,6 +3541,7 @@ function renderDetail(link) {
 
                     <!-- Danger zone -->
                     <hr class="edit-divider">
+                    <button class="btn-action edit-action-btn" id="btnRescrape" title="${__('detail_rescrape_hint')}">🔃 ${__('detail_rescrape')}</button>
                     <button class="btn-action edit-action-btn" id="btnClearSummary">🔄 ${__('detail_clear_summary')}</button>
                     <button class="btn-action danger edit-action-btn" id="btnDeleteLink">🗑️ ${__('detail_delete')}</button>
                 </div>
@@ -3626,6 +3639,43 @@ function renderDetail(link) {
     });
 
     // ── Clear Summary ────────────────────────────────────
+    // ── Inhalt neu einlesen (Webseite crawlen / Untertitel neu laden) ────────
+    const btnRescrape = document.getElementById('btnRescrape');
+    if (btnRescrape) {
+        btnRescrape.addEventListener('click', async () => {
+            if (!confirm(__('confirm_rescrape'))) return;
+
+            const label = btnRescrape.innerHTML;
+            btnRescrape.disabled = true;
+            btnRescrape.textContent = '⏳ …';
+            showProgressOverlay();
+
+            try {
+                const req = fetch(`/api/links/rescrape?id=${link.id}`, { method: 'POST' });
+                pollProgress(req);                       // Fortschritt im Overlay
+                const r = await req;
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+
+                const source = data.source === 'youtube' ? __('toast_rescrape_yt') : __('toast_rescrape_web');
+                let msg = `✅ ${__('toast_rescraped')} (${source}, ${data.content_chars} Zeichen`;
+                msg += data.summary_chars ? `, Zusammenfassung ${data.summary_chars})` : ')';
+                showToast(msg);
+                (data.warnings || []).forEach(warn => showToast('⚠️ ' + warn));
+
+                // Detailansicht mit neuen Daten neu zeichnen
+                const fresh = await api('/api/share?id=' + link.id);
+                if (fresh) renderDetail(fresh);
+            } catch (e) {
+                showToast('❌ ' + e.message);
+            } finally {
+                closeProgressOverlay();
+                btnRescrape.disabled = false;
+                btnRescrape.innerHTML = label;
+            }
+        });
+    }
+
     const btnClear = document.getElementById('btnClearSummary');
     if (btnClear) {
         btnClear.addEventListener('click', async () => {

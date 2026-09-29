@@ -27,6 +27,8 @@ func (a *App) handleAPI(w http.ResponseWriter, r *http.Request) {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
+	case "/api/links/rescrape":
+		a.rescrapeLink(w, r)
 	case "/api/categories":
 		a.getCategories(w, r)
 	case "/api/share":
