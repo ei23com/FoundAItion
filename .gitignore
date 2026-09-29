@@ -9,3 +9,4 @@ server.log
 .go-toolchain/
 .gomodcache/
 .gocache/
+subs/

@@ -238,9 +238,16 @@ func extractYouTubeCanonicalURL(url string) string {
 	return ""
 }
 
-// extractYouTubeSubtitles nutzt yt-dlp, um automatische Untertitel herunterzuladen
-// und als vereinfachtes "HH:MM:SS Text"-Format zurückzugeben.
-// Liefert eine leere String zurueck, wenn keine Untertitel verfuegbar sind.
+// extractYouTubeSubtitles nutzt yt-dlp, um Untertitel herunterzuladen und als
+// vereinfachtes "HH:MM:SS Text"-Format zurückzugeben.
+//
+// Die Sprachauswahl folgt YTDLP_SUB_LANGS (Default "en.*,de.*"): bei englischen
+// Videos wird die englische, bei deutschen die deutsche Spur genutzt. Eine
+// frühere Version nutzte ".*-orig" und damit *jede* Original-Spur – YouTube
+// liefert dabei oft Arabisch, das dann alphabetisch vor Englisch gewann.
+//
+// Liefert einen leeren String zurück, wenn keine passenden Untertitel
+// verfügbar sind (kein Fehler).
 func (a *App) extractYouTubeSubtitles(url string) (string, error) {
 	tmpDir := filepath.Join(a.cfg.YTDLAOutputDir, fmt.Sprintf("subs_%d", time.Now().UnixNano()))
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
@@ -248,66 +255,36 @@ func (a *App) extractYouTubeSubtitles(url string) (string, error) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// yt-dlp --skip-download --write-auto-subs --convert-subs srt ...
-	// --use-postprocessor srt_fix:when=before_dl bereinigt die SRT-Datei
-	cmd := exec.Command(a.cfg.YTDLPPath,
-		"--skip-download",
-		"--no-playlist",
-		"--write-auto-subs",
-		"--sub-langs", ".*-orig",
-		"--convert-subs", "srt",
-		"--use-postprocessor", "srt_fix:when=before_dl",
-		"-o", filepath.Join(tmpDir, "%(id)s"),
-		"--quiet",
-		url,
-	)
-	cmd.Dir = getBinaryDir()
+	patterns := subLangPatterns(a.cfg.YouTubeSubLangs)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	var output []byte
-	errCh := make(chan error, 1)
-	go func() {
-		var e error
-		output, e = cmd.CombinedOutput()
-		errCh <- e
-	}()
-
-	select {
-	case cmdErr := <-errCh:
-		if cmdErr != nil {
-			return "", fmt.Errorf("yt-dlp subtitles failed: %s", string(output))
-		}
-	case <-ctx.Done():
-		if cmd.Process != nil {
-			cmd.Process.Kill()
-		}
-		<-errCh
-		return "", fmt.Errorf("yt-dlp subtitles timed out")
-	}
-
-	// Nach der erstellten .srt-Datei suchen (z.B. VIDEO_ID.en.srt)
-	entries, err := os.ReadDir(tmpDir)
+	// yt-dlp --skip-download --write-subs --write-auto-subs --sub-langs <en,de>
+	// --sub-format srt/vtt + srt_fix-Plugin (bereinigt Dopplungen/Rollzeilen).
+	// Menschliche Untertitel haben Vorrang (bessere Qualität), automatische
+	// dienen als Fallback – yt-dlp lädt pro Sprache nur eine Datei.
+	res, err := a.downloadSubtitles(subsRequest{
+		URL:     url,
+		OutDir:  tmpDir,
+		Langs:   strings.Join(patterns, ","),
+		Auto:    true,
+		Manual:  true,
+		Timeout: 60 * time.Second,
+	})
 	if err != nil {
-		return "", fmt.Errorf("read temp dir: %w", err)
+		return "", err
 	}
 
-	var srtFile string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".srt") {
-			srtFile = filepath.Join(tmpDir, entry.Name())
-			break
+	best := pickSubtitleFile(res.Files, patterns, res.VideoLang)
+	if best == "" {
+		if len(res.Files) > 0 {
+			// Sollte mit eingeschränktem --sub-langs nicht vorkommen; hilft beim Debuggen.
+			log.Printf("[yt-dlp subs] keine passende Spur zu %v (Video=%q, vorhanden: %v)", patterns, res.VideoLang, res.Files)
 		}
+		return "", nil // Keine Untertitel in den gewünschten Sprachen – kein Fehler
 	}
 
-	if srtFile == "" {
-		return "", nil // Keine Untertitel verfuegbar – kein Fehler
-	}
-
-	data, err := os.ReadFile(srtFile)
+	data, err := os.ReadFile(filepath.Join(tmpDir, best))
 	if err != nil {
-		return "", fmt.Errorf("read srt file: %w", err)
+		return "", fmt.Errorf("read subtitle file: %w", err)
 	}
 
 	srtContent := strings.TrimSpace(string(data))
@@ -315,9 +292,12 @@ func (a *App) extractYouTubeSubtitles(url string) (string, error) {
 		return "", nil // Leere Untertitel
 	}
 
-	// SRT in vereinfachtes Format konvertieren
-	simple := convertSRTToSimple(srtContent)
-	log.Printf("[yt-dlp subs] %d chars -> %d chars (simple)", len(srtContent), len(simple))
+	// Untertitel in das vereinfachte Format konvertieren (SRT oder VTT)
+	simple := convertSubtitleToSimple(srtContent)
+	log.Printf("[yt-dlp subs] lang=%s video=%s %d chars -> %d chars (simple)", srtLangTag(best), res.VideoLang, len(srtContent), len(simple))
+	if strings.TrimSpace(res.Output) != "" {
+		log.Printf("[yt-dlp subs] %s", strings.TrimSpace(res.Output))
+	}
 	return simple, nil
 }
 

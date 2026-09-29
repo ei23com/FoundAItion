@@ -22,6 +22,8 @@ type Config struct {
 	YTDLPPath             string // Path to yt-dlp binary
 	YTDLAOutputDir        string // Output directory for downloaded audio files
 	YouTubeSubtitleMethod string // "whisper", "yt-dlp", "auto"
+	YouTubeSubLangs       string // Preferred subtitle languages (yt-dlp patterns, priority order)
+	YTDSubsDir            string // Output directory for the yt-sub helper tool
 	MaxProcessDays        int    // Max days backwards for processing (default: 14)
 	SummaryMaxTokens      int    // Maximum tokens for summary (default: 64000)
 	AutoSummarize         bool   // Auto-generate summary on add (default: true)
@@ -75,6 +77,8 @@ func loadConfig() Config {
 		YTDLPPath:             envOrDefault("YTDLP_PATH", getYTDLPPath()),
 		YTDLAOutputDir:        envOrDefault("YTDLA_OUTPUT_DIR", filepath.Join(getBinaryDir(), "audio_tmp")),
 		YouTubeSubtitleMethod: envOrDefault("YOUTUBE_SUBTITLE_METHOD", "auto"),
+		YouTubeSubLangs:       envOrDefault("YTDLP_SUB_LANGS", DefaultSubLangs),
+		YTDSubsDir:            envOrDefault("YT_SUBS_DIR", filepath.Join(getBinaryDir(), "subs")),
 		MaxProcessDays:        envIntOrDefault("MAX_PROCESS_DAYS", 14),
 		SummaryMaxTokens:      maxTokens,
 		AutoSummarize:         autoSummarize,

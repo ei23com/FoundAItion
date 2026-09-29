@@ -156,6 +156,38 @@ Every entry is positioned on an interactive 2D map by its embedding vector – s
 
 ---
 
+## YouTube subtitles & the `yt-sub` helper
+
+**Language selection:** transcripts are English or German (`YTDLP_SUB_LANGS`, default `en.*,de.*`). English
+videos use the English track, German videos the German one – detected from the language spoken in the video.
+Within a language, **human** subtitles win over automatic ones (`srt_fix` cleans up automatic rolling
+captions). If no matching track exists, no transcript is produced on purpose (never foreign-language
+material). Requests stay minimal (`en,en-orig,de,de-orig`); only when that yields nothing is a broader search
+issued – this keeps YouTube's rate limit (HTTP 429) happy.
+
+**Manual helper** for when the pipeline finds no subtitles:
+
+```bash
+./yt-sub en "https://www.youtube.com/watch?v=XXXXXXXXXXX"   # English
+./yt-sub de "https://youtu.be/XXXXXXXXXXX"                  # German
+./yt-sub en,de "<url>"                                      # both, priority as above
+./yt-sub --list "<url>"                                     # show available languages
+```
+
+The script switches into the program directory (so `.env`, `foundaition.db`, `yt-dlp_linux` and the plugin are
+found) and calls `./foundaition yt-sub …`. It writes into the target directory (`YT_SUBS_DIR`, default `./subs`):
+
+| File | Content |
+|------|---------|
+| `<videoID>.<lang>.srt` | downloaded subtitles (or `.vtt` when only VTT exists) |
+| `<videoID>.<lang>.txt` | same content in the program format `HH:MM:SS Text` (like the `content` column) |
+
+If the URL exists in the database, the transcript is written straight into `content` – summaries and the topic
+map can then use it. Options: `--out DIR`, `--manual` (human subtitles only), `--auto` (automatic only),
+`--no-db`, `--timeout SEC`, `-h`.
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -173,6 +205,8 @@ Every entry is positioned on an interactive 2D map by its embedding vector – s
 | `WHISPER_MODEL` | `large-v3` | Whisper model |
 | `CRAWL_TIMEOUT` | `60` | Timeout per crawl request (seconds) |
 | `YTDLP_PATH` | auto-detect | Path to yt-dlp binary |
+| `YTDLP_SUB_LANGS` | `en.*,de.*` | Preferred subtitle languages (yt-dlp patterns, priority order). English videos use the English track, German videos the German one. Never set `.*-orig` – it downloads every original track (often Arabic on English videos). |
+| `YT_SUBS_DIR` | `./subs` | Output directory of the manual helper `yt-sub` |
 | `MAX_PROCESS_DAYS` | `14` | Max days backwards for batch processing |
 | `RSS_BASE_URL` | *(empty)* | Base URL for feed links (e.g. behind reverse proxy). Empty = auto-detected from request host. |
 | `RSS_ITEM_COUNT` | `30` | Max entries in Atom feed |

@@ -158,6 +158,38 @@ Jeder Eintrag wird per Embedding-Vektor auf einer interaktiven 2D-Karte position
 
 ---
 
+## YouTube-Untertitel & Helfer `yt-sub`
+
+**Sprachauswahl:** Transkripte kommen in Englisch oder Deutsch (`YTDLP_SUB_LANGS`, Default `en.*,de.*`).
+Bei englischen Videos wird die englische Spur genutzt, bei deutschen die deutsche – erkannt über die im Video
+gesprochene Sprache. Innerhalb einer Sprache haben **menschliche** Untertitel Vorrang vor automatischen
+(`srt_fix` bereinigt automatische Rollzeilen). Passt keine Spur, wird bewusst kein Transkript erzeugt
+(kein fremdsprachiges Material). Anfragen bleiben minimal (`en,en-orig,de,de-orig`); nur wenn das nichts
+liefert, wird breiter gesucht – das schont YouTubes Ratelimit (HTTP 429).
+
+**Manueller Helfer**, wenn die Pipeline einmal keine Untertitel findet:
+
+```bash
+./yt-sub en "https://www.youtube.com/watch?v=XXXXXXXXXXX"   # Englisch
+./yt-sub de "https://youtu.be/XXXXXXXXXXX"                  # Deutsch
+./yt-sub en,de "<url>"                                      # beide, Priorität wie oben
+./yt-sub --list "<url>"                                     # verfügbare Sprachen anzeigen
+```
+
+Das Skript wechselt ins Programmverzeichnis (nutzt `.env`, `foundaition.db`, `yt-dlp_linux` und das Plugin)
+und ruft intern `./foundaition yt-sub …` auf. Es speichert im Zielverzeichnis (`YT_SUBS_DIR`, Default `./subs`):
+
+| Datei | Inhalt |
+|-------|--------|
+| `<videoID>.<sprache>.srt` | heruntergeladene Untertitel (bzw. `.vtt`, wenn nur VTT vorliegt) |
+| `<videoID>.<sprache>.txt` | dasselbe im Programmformat `HH:MM:SS Text` (wie Spalte `content`) |
+
+Ist die URL in der Datenbank vorhanden, wird das Transkript direkt in `content` geschrieben – danach können
+Zusammenfassung und Themenkarte es nutzen. Optionen: `--out DIR`, `--manual` (nur menschliche Untertitel),
+`--auto` (nur automatische), `--no-db`, `--timeout SEK`, `-h`.
+
+---
+
 ## Umgebungsvariablen
 
 | Variable | Default | Description |
@@ -175,6 +207,8 @@ Jeder Eintrag wird per Embedding-Vektor auf einer interaktiven 2D-Karte position
 | `WHISPER_MODEL` | `large-v3` | Whisper model |
 | `CRAWL_TIMEOUT` | `60` | Timeout per crawl request (seconds) |
 | `YTDLP_PATH` | auto-detect | Path to yt-dlp binary |
+| `YTDLP_SUB_LANGS` | `en.*,de.*` | Bevorzugte Untertitelsprachen (yt-dlp-Muster, Prioritätsreihenfolge). Englische Videos nutzen die englische, deutsche die deutsche Spur. Nie `.*-orig` setzen – das lädt jede Original-Spur (bei englischen Videos oft Arabisch). |
+| `YT_SUBS_DIR` | `./subs` | Zielverzeichnis des manuellen Helfers `yt-sub` |
 | `MAX_PROCESS_DAYS` | `14` | Max days backwards for batch processing |
 | `RSS_BASE_URL` | *(leer)* | Basis-URL für Feed-Links (z.B. bei Reverse Proxy). Leer = automatisch aus dem Request-Host. |
 | `RSS_ITEM_COUNT` | `30` | Maximale Einträge im Atom-Feed |

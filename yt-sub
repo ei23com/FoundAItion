@@ -1,0 +1,25 @@
+#!/bin/sh
+# yt-sub – YouTube-Untertitel manuell herunterladen (Wrapper für "foundaition yt-sub").
+#
+# Aufruf:
+#   ./yt-sub en "https://www.youtube.com/watch?v=XXXXXXXXXXX"
+#   ./yt-sub --list "https://www.youtube.com/watch?v=XXXXXXXXXXX"
+#
+# Liegt dieses Skript im PATH, genügt "yt-sub en <url>".
+#
+# Wechselt in das Programmverzeichnis, damit .env, foundaition.db, yt-dlp_linux
+# und das srt_fix-Plugin genauso gefunden werden wie beim Serverstart.
+
+set -e
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BIN="$SCRIPT_DIR/foundaition"
+
+if [ ! -x "$BIN" ]; then
+    echo "Fehler: $BIN nicht gefunden oder nicht ausführbar." >&2
+    echo "Bitte zuerst bauen:  go build -o foundaition ." >&2
+    exit 1
+fi
+
+cd "$SCRIPT_DIR"
+exec "$BIN" yt-sub "$@"

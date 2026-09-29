@@ -9,7 +9,7 @@ A **single-binary web application** for collecting, managing, and summarizing li
 
 - **Link management** – Add, browse, search, filter, edit, and delete links
 - **Web crawling** – Built-in crawler (Colly) extracts page content as Markdown
-- **YouTube support** – Automatic thumbnail display, playlist support, subtitle/Whisper transcription
+- **YouTube support** – Automatic thumbnail display, playlist support, subtitle/Whisper transcription (English/German subtitles, human ones preferred; manual helper `yt-sub` for a chosen language)
 - **AI summaries** – Generate summaries via any OpenAI-compatible API (GPT, Claude, local LLMs)
 - **Local LLM support** – Use [LiteLLM](https://github.com/BerriAI/litellm) or [llama.cpp](https://github.com/ggml-org/llama.cpp) server as drop-in replacements – just set `OPENAI_BASE_URL` to your local endpoint
 - **Bilingual UI** – Deutsch & English, switchable at runtime

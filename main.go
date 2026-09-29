@@ -34,6 +34,12 @@ var mdRenderer = goldmark.New(goldmark.WithExtensions(extension.GFM))
 const pageSizeDB = 20
 
 func main() {
+	// Unterbefehl "yt-sub": manueller Untertitel-Download (siehe ytsub.go).
+	// Startet nicht den Server, sondern beendet das Programm danach.
+	if len(os.Args) > 1 && (os.Args[1] == "yt-sub" || os.Args[1] == "ytsub") {
+		os.Exit(runYTSub(os.Args[2:]))
+	}
+
 	cfg := loadConfig()
 	cfg.resolveEmbeddingDefaults()
 
