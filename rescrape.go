@@ -11,37 +11,45 @@ import (
 
 // ─── Einzelnen Eintrag neu einlesen ──────────────────────────────────────────
 //
-// Lädt den Inhalt eines bestehenden Eintrags neu – Webseite erneut crawlen
-// bzw. Untertitel erneut holen – und erstellt die Zusammenfassung neu. Damit
-// lassen sich alte Einträge korrigieren, deren Inhalt z. B. in der falschen
-// Sprache (etwa Arabisch) geladen wurde.
+// Zwei getrennte Aktionen für die Detailansicht:
+//
+//	POST /api/links/rescrape?id=N    → Inhalt neu laden (Crawl bzw. Untertitel)
+//	POST /api/links/resummarize?id=N → Zusammenfassung neu erstellen
+//
+// So lassen sich alte Einträge gezielt korrigieren, deren Inhalt z. B. in der
+// falschen Sprache (etwa Arabisch) geladen wurde – ohne die Zusammenfassung
+// ungewollt mit zu erneuern.
 
 // rescrapeResponse ist die Antwort von POST /api/links/rescrape.
 type rescrapeResponse struct {
 	ID           int64    `json:"id"`
 	Source       string   `json:"source"` // "youtube" oder "web"
 	ContentChars int      `json:"content_chars"`
-	SummaryChars int      `json:"summary_chars"`
 	TitleUpdated bool     `json:"title_updated,omitempty"`
 	Warnings     []string `json:"warnings,omitempty"`
 }
 
-// rescrapeLink behandelt POST /api/links/rescrape?id=N[&summary=0].
-//
-// Läuft synchron (der Aufrufer pollt /api/progress wie beim Sammel-Job).
-// Mit summary=0 wird nur der Inhalt neu geladen.
+// resummarizeResponse ist die Antwort von POST /api/links/resummarize.
+type resummarizeResponse struct {
+	ID             int64    `json:"id"`
+	ContentChars   int      `json:"content_chars"`
+	SummaryChars   int      `json:"summary_chars"`
+	ContentFetched bool     `json:"content_fetched,omitempty"` // Inhalt musste erst geladen werden
+	Warnings       []string `json:"warnings,omitempty"`
+}
+
+// rescrapeLink behandelt POST /api/links/rescrape?id=N.
+// Lädt ausschließlich den Inhalt neu (Webseite crawlen bzw. Untertitel holen)
+// und lässt die Zusammenfassung unangetastet.
 func (a *App) rescrapeLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	id, err := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("id")), 10, 64)
-	if err != nil || id <= 0 {
-		writeJSONError(w, http.StatusBadRequest, `Parameter "id" fehlt oder ist ungültig`)
+	id, ok := parseLinkID(w, r)
+	if !ok {
 		return
 	}
-	withSummary := r.URL.Query().Get("summary") != "0"
 
 	link, err := a.fetchLinkByID(id, false)
 	if err != nil {
@@ -52,65 +60,29 @@ func (a *App) rescrapeLink(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Eintrag %d hat keine URL", id))
 		return
 	}
-
-	// Nur ein inhaltlicher Job gleichzeitig: lokale Modellserver halten meist
-	// nur ein Modell geladen, und der Fortschrittsbalken ist gemeinsam genutzt.
-	a.progress.mu.Lock()
-	busy := a.progress.Status == "running"
-	a.progress.mu.Unlock()
-	if busy {
+	if a.linkJobBusy() {
 		writeJSONError(w, http.StatusConflict, "Es läuft bereits eine Verarbeitung – bitte abwarten")
 		return
 	}
 
 	a.llmMu.Lock()
 	defer a.llmMu.Unlock()
-
 	a.setProgress(1, 0, 1, fmt.Sprintf("Inhalt wird neu geladen (Eintrag %d)…", id))
-	defer func() {
-		a.setProgress(0, 1, 1, "Fertig")
-		a.progress.mu.Lock()
-		a.progress.Status = "done"
-		a.progress.mu.Unlock()
-	}()
+	defer a.finishLinkJob("Inhalt neu geladen")
 
 	resp := rescrapeResponse{ID: id}
-	web := !isYouTubeURL(link.URL)
-
-	// ─── Schritt 1: Inhalt neu laden ──────────────────────────────────────
-	var content string
-	if web {
-		resp.Source = "web"
-		crawled, cerr := a.crawlPage(link.URL)
-		if cerr != nil {
-			log.Printf("[rescrape] id=%d crawl failed: %v", id, cerr)
-			writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Webseite konnte nicht geladen werden: %v", cerr))
-			return
-		}
-		content = strings.TrimSpace(crawled)
-		// Wie beim Anlegen begrenzen, damit das Token-Limit nicht überschritten wird.
-		if max := int(float64(a.cfg.SummaryMaxTokens) * 3.5); max > 0 && len(content) > max {
-			content = content[:max]
-		}
-		// Titel nur ergänzen, niemals einen vorhandenen (ggf. bearbeiteten) überschreiben.
-		if strings.TrimSpace(link.Title) == "" {
-			if title := truncateTitleMax(extractTitleFromMarkdown(content), 150); title != "" {
-				if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "title" = ? WHERE "id" = ?`, TableName), title, id); uerr == nil {
-					resp.TitleUpdated = true
-				}
-			}
-		}
-	} else {
+	if isYouTubeURL(link.URL) {
 		resp.Source = "youtube"
-		transcript, terr := a.resolveYouTubeTranscript(link.URL)
-		if terr != nil {
-			log.Printf("[rescrape] id=%d transcript failed: %v", id, terr)
-			writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Untertitel konnten nicht geladen werden: %v", terr))
-			return
-		}
-		content = strings.TrimSpace(transcript)
+	} else {
+		resp.Source = "web"
 	}
 
+	content, cerr := a.fetchLinkContent(link)
+	if cerr != nil {
+		log.Printf("[rescrape] id=%d %s failed: %v", id, resp.Source, cerr)
+		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Inhalt konnte nicht geladen werden: %v", cerr))
+		return
+	}
 	if content == "" {
 		writeJSONError(w, http.StatusBadGateway, "Kein Inhalt gefunden (leere Seite bzw. keine Untertitel)")
 		return
@@ -122,41 +94,156 @@ func (a *App) rescrapeLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp.ContentChars = len(content)
-	log.Printf("[rescrape] id=%d %s content reloaded (%d chars)", id, resp.Source, len(content))
 
-	// ─── Schritt 2: Zusammenfassung neu erstellen ─────────────────────────
-	switch {
-	case !withSummary:
-		resp.Warnings = append(resp.Warnings, "Zusammenfassung unverändert (summary=0)")
-	case a.cfg.OpenAIKey == "":
-		resp.Warnings = append(resp.Warnings, "Kein OPENAI_API_KEY konfiguriert – Zusammenfassung nicht neu erstellt")
-	default:
-		a.setProgress(2, 0, 1, "Zusammenfassung wird neu erstellt…")
-		summary, serr := a.generateSummary(content, resolvePrompt(link.Note), a.cfg.UILanguage)
-		if serr != nil {
-			if strings.Contains(serr.Error(), ErrTooLong) {
-				if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "summary" = ? WHERE "id" = ?`, TableName), "zu langer Text", id); uerr == nil {
-					resp.SummaryChars = len("zu langer Text")
-				}
-				resp.Warnings = append(resp.Warnings, "Inhalt überschreitet das Token-Limit")
+	// Titel nur ergänzen, niemals einen vorhandenen (ggf. bearbeiteten) überschreiben.
+	if resp.Source == "web" && strings.TrimSpace(link.Title) == "" {
+		if title := truncateTitleMax(extractTitleFromMarkdown(content), 150); title != "" {
+			if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "title" = ? WHERE "id" = ?`, TableName), title, id); uerr != nil {
+				resp.Warnings = append(resp.Warnings, fmt.Sprintf("Titel nicht gespeichert: %v", uerr))
 			} else {
-				log.Printf("[rescrape] id=%d summary failed: %v", id, serr)
-				resp.Warnings = append(resp.Warnings, fmt.Sprintf("Zusammenfassung fehlgeschlagen: %v", serr))
+				resp.TitleUpdated = true
 			}
-			break
 		}
-		if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "summary" = ? WHERE "id" = ?`, TableName), summary, id); uerr != nil {
-			log.Printf("[rescrape] id=%d summary update failed: %v", id, uerr)
-			resp.Warnings = append(resp.Warnings, fmt.Sprintf("Zusammenfassung nicht gespeichert: %v", uerr))
-			break
-		}
-		resp.SummaryChars = len(summary)
-		a.afterTextChange(id) // Vektor verwerfen/erneuern (Themenkarte)
-		log.Printf("[rescrape] id=%d summary regenerated (%d chars)", id, len(summary))
 	}
+
+	log.Printf("[rescrape] id=%d %s content reloaded (%d chars), summary untouched", id, resp.Source, len(content))
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// resummarizeLink behandelt POST /api/links/resummarize?id=N.
+// Erstellt die Zusammenfassung aus dem aktuellen Inhalt neu (ersetzt den
+// vorhandenen Text). Fehlt der Inhalt, wird er zuvor geladen.
+func (a *App) resummarizeLink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id, ok := parseLinkID(w, r)
+	if !ok {
+		return
+	}
+	if a.cfg.OpenAIKey == "" {
+		writeJSONError(w, http.StatusBadGateway, "Kein OPENAI_API_KEY konfiguriert – Zusammenfassung nicht möglich")
+		return
+	}
+
+	link, err := a.fetchLinkByID(id, true) // mit Inhalt
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, fmt.Sprintf("Eintrag %d nicht gefunden", id))
+		return
+	}
+	if a.linkJobBusy() {
+		writeJSONError(w, http.StatusConflict, "Es läuft bereits eine Verarbeitung – bitte abwarten")
+		return
+	}
+
+	a.llmMu.Lock()
+	defer a.llmMu.Unlock()
+	a.setProgress(2, 0, 1, "Zusammenfassung wird neu erstellt…")
+	defer a.finishLinkJob("Zusammenfassung neu erstellt")
+
+	resp := resummarizeResponse{ID: id}
+
+	// Inhalt: vorhandenen nutzen, sonst laden (z. B. bei noch leerem Eintrag).
+	content := strings.TrimSpace(link.Content)
+	if content == "" {
+		if strings.TrimSpace(link.URL) == "" {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Eintrag %d hat weder Inhalt noch URL", id))
+			return
+		}
+		fetched, ferr := a.fetchLinkContent(link)
+		if ferr != nil {
+			log.Printf("[resummarize] id=%d content fetch failed: %v", id, ferr)
+			writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Inhalt konnte nicht geladen werden: %v", ferr))
+			return
+		}
+		if strings.TrimSpace(fetched) == "" {
+			writeJSONError(w, http.StatusBadGateway, "Kein Inhalt vorhanden – bitte zuerst den Inhalt neu laden")
+			return
+		}
+		content = fetched
+		resp.ContentFetched = true
+		if err := a.saveContent(id, content); err != nil {
+			log.Printf("[resummarize] id=%d save fetched content failed: %v", id, err)
+			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Inhalt konnte nicht gespeichert werden: %v", err))
+			return
+		}
+	}
+	resp.ContentChars = len(content)
+
+	summary, serr := a.generateSummary(content, resolvePrompt(link.Note), a.cfg.UILanguage)
+	if serr != nil {
+		if strings.Contains(serr.Error(), ErrTooLong) {
+			// Wie in der Pipeline: Platzhalter setzen, damit der Eintrag nicht hängen bleibt.
+			if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "summary" = ? WHERE "id" = ?`, TableName), "zu langer Text", id); uerr != nil {
+				writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Zusammenfassung nicht gespeichert: %v", uerr))
+				return
+			}
+			resp.SummaryChars = len("zu langer Text")
+			resp.Warnings = append(resp.Warnings, "Inhalt überschreitet das Token-Limit")
+			log.Printf("[resummarize] id=%d content too long, placeholder stored", id)
+			writeJSON(w, resp)
+			return
+		}
+		log.Printf("[resummarize] id=%d summary failed: %v", id, serr)
+		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Zusammenfassung fehlgeschlagen: %v", serr))
+		return
+	}
+
+	if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "summary" = ? WHERE "id" = ?`, TableName), summary, id); uerr != nil {
+		log.Printf("[resummarize] id=%d summary update failed: %v", id, uerr)
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Zusammenfassung nicht gespeichert: %v", uerr))
+		return
+	}
+	resp.SummaryChars = len(summary)
+	a.afterTextChange(id) // Vektor verwerfen/erneuern (Themenkarte)
+	log.Printf("[resummarize] id=%d summary regenerated (%d chars from %d chars content)", id, len(summary), len(content))
+
+	writeJSON(w, resp)
+}
+
+// ─── Helfer ──────────────────────────────────────────────────────────────────
+
+// fetchLinkContent holt den Inhalt einer URL: Untertitel bei YouTube, sonst
+// die gecrawlte Webseite. Gespeichert wird hier nichts.
+func (a *App) fetchLinkContent(link *Link) (string, error) {
+	if isYouTubeURL(link.URL) {
+		transcript, err := a.resolveYouTubeTranscript(link.URL)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(transcript), nil
+	}
+
+	crawled, err := a.crawlPage(link.URL)
+	if err != nil {
+		return "", err
+	}
+	content := strings.TrimSpace(crawled)
+	// Wie beim Anlegen begrenzen, damit das Token-Limit nicht überschritten wird.
+	if max := int(float64(a.cfg.SummaryMaxTokens) * 3.5); max > 0 && len(content) > max {
+		content = content[:max]
+	}
+	return content, nil
+}
+
+// parseLinkID liest den id-Parameter; bei Fehlern antwortet sie bereits.
+func parseLinkID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("id")), 10, 64)
+	if err != nil || id <= 0 {
+		writeJSONError(w, http.StatusBadRequest, `Parameter "id" fehlt oder ist ungültig`)
+		return 0, false
+	}
+	return id, true
+}
+
+// linkJobBusy meldet, ob bereits eine Verarbeitung läuft.
+func (a *App) linkJobBusy() bool {
+	a.progress.mu.Lock()
+	defer a.progress.mu.Unlock()
+	return a.progress.Status == "running"
 }
 
 // setProgress aktualisiert den gemeinsamen Fortschrittszustand.
@@ -168,6 +255,24 @@ func (a *App) setProgress(phase, current, total int, message string) {
 	a.progress.Current = current
 	a.progress.Total = total
 	a.progress.Message = message
+}
+
+// finishLinkJob schließt den Fortschritt ab, damit das Overlay schließt.
+func (a *App) finishLinkJob(message string) {
+	a.progress.mu.Lock()
+	defer a.progress.mu.Unlock()
+	a.progress.Status = "done"
+	a.progress.Phase = 0
+	if a.progress.Total > 0 {
+		a.progress.Current = a.progress.Total
+	}
+	a.progress.Message = message
+}
+
+// writeJSON schreibt eine JSON-Antwort.
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(v)
 }
 
 // writeJSONError liefert einen Fehler als JSON (die UI zeigt die Meldung direkt an).

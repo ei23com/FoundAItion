@@ -102,8 +102,12 @@ func TestRescrapeWebPage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	app := testAppWithDB(t, Config{})                               // ohne OPENAI_API_KEY → Zusammenfassung wird übersprungen
+	app := testAppWithDB(t, Config{})                               // ohne OPENAI_API_KEY
 	id := insertTestLink(t, app, srv.URL, "", "النص العربي القديم") // "alter arabischer Text"
+	// Eine vorhandene Zusammenfassung darf durch das Neuladen nicht angefasst werden.
+	if _, err := app.db.Exec(fmt.Sprintf(`UPDATE %s SET "summary" = ? WHERE "id" = ?`, TableName), "alte Zusammenfassung", id); err != nil {
+		t.Fatalf("summary setzen: %v", err)
+	}
 
 	rec := rescrapeRequest(app, id, http.MethodPost)
 	if rec.Code != http.StatusOK {
@@ -137,8 +141,11 @@ func TestRescrapeWebPage(t *testing.T) {
 	if !resp.TitleUpdated {
 		t.Fatalf("title_updated sollte true sein")
 	}
-	if len(resp.Warnings) == 0 {
-		t.Fatalf("Warnung zum fehlenden OPENAI_API_KEY erwartet")
+	// Die Zusammenfassung bleibt beim Inhalt-Neuladen unangetastet.
+	var summary string
+	app.db.QueryRow(fmt.Sprintf(`SELECT "summary" FROM %s WHERE "id" = ?`, TableName), id).Scan(&summary)
+	if summary != "alte Zusammenfassung" {
+		t.Fatalf("Zusammenfassung wurde verändert: %q", summary)
 	}
 
 	// Fortschritt muss wieder freigegeben sein (Overlay schließt).

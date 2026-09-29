@@ -128,7 +128,8 @@ Open `http://localhost:8080` in your browser. Change port via `LISTEN_PORT=9000`
   - 📋 Copy URL
   - 📝 Copy summary as Markdown
   - ↗️ Open in browser
-- 🔃 **Reload content & summary** (in the edit area, next to "Reset summary"): re-crawls the web page or reloads the subtitles (English/German) and regenerates the summary – this fixes older entries whose content was loaded in the wrong language. Runs with a progress overlay; an existing title is never overwritten
+- 🔃 **Reload content** (in the edit area, next to "Regenerate summary"): re-crawls the web page or reloads the subtitles (English/German). The content is replaced, the **summary stays unchanged** – this fixes older entries whose content was loaded in the wrong language. An existing title is never overwritten
+- 🧠 **Regenerate summary** (replaces the former "Reset summary"): regenerates the summary from the current content, so it is not merely deleted but rewritten. If the content is missing it is fetched first. Should the LLM call fail, the existing summary stays in place
 - 🗑️ **Delete entry** (with confirmation dialog)
 
 ### Language switching
@@ -242,7 +243,8 @@ map can then use it. Options: `--out DIR`, `--manual` (human subtitles only), `-
 | GET | `/api/feed/unread?id=X` | Set read=0 (mark as unread) |
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
 | GET | `/api/map` | Topic map: status, counters and all 2D points (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
-| POST | `/api/links/rescrape?id=N[&summary=0]` | Reloads an entry's content (crawl the page / fetch subtitles) and regenerates the summary; `summary=0` keeps the summary unchanged |
+| POST | `/api/links/rescrape?id=N` | Reloads only an entry's content (crawl the page / fetch subtitles); the summary stays unchanged. Fills in an empty title |
+| POST | `/api/links/resummarize?id=N` | Regenerates the summary from the current content (replaces the existing text); fetches the content first if it is missing |
 | POST | `/api/map/embeddings` | Start background embedding+projection (`?force=true` = recompute all vectors) – returns `202` immediately |
 | GET | `/api/map/status` | Progress of the map job (`job.phase`, `job.done`, `job.total`, `job.pct`) |
 | POST | `/api/map/query` | Semantic search over the map vectors (`{"query":"..."}` → top 300 with cosine scores) |
