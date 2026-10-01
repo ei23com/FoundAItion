@@ -8,19 +8,48 @@ A **single-binary web application** for collecting, managing, and summarizing li
 ## Features
 
 - **Link management** – Add, browse, search, filter, edit, and delete links
-- **Web crawling** – Built-in crawler (Colly) extracts page content as Markdown
-- **YouTube support** – Automatic thumbnail display, playlist support, subtitle/Whisper transcription (English/German subtitles, human ones preferred; manual helper `yt-sub` for a chosen language)
-- **AI summaries** – Generate summaries via any OpenAI-compatible API (GPT, Claude, local LLMs)
+- **Browser-grade web scraping** – Content is extracted as Markdown via [Mozilla Readability](https://github.com/go-shiori/go-readability) (the algorithm behind Firefox's reader view), which removes cookie banners, navigation, ads and paywall frames; the title always comes from the HTML `<head><title>` (SVG logo `<title>` tags are ignored), and blocked sites are retried over HTTP/1.1 – no per-site special cases
+- **Custom prompts via the note** – Put a template name like `chapters_EN` or `custom_prompt` into an entry's note and that `prompts/*.md` template is used for its summary instead of the default – see [Custom Prompts via the Note](#custom-prompts-via-the-note)
+- **Two separate refresh actions** – 🔃 **Reload content** (re-crawls the page or reloads subtitles, corrects the title, keeps the summary) and 🧠 **Regenerate summary** (rewrites the summary from the current content) – as UI buttons and as APIs
+- **YouTube support** – Automatic thumbnail display, playlist support, subtitle/Whisper transcription (English/German subtitles, human ones preferred; helper CLI `yt-sub en|de <url>` saves subtitles as `.srt`/`.txt` on disk or writes them into the entry)
+- **AI summaries** – Generate summaries via any OpenAI-compatible API (GPT, Claude, local LLMs); slow local model loading is tolerated (`LLM_TIMEOUT`, minimum 240 s)
 - **Local LLM support** – Use [LiteLLM](https://github.com/BerriAI/litellm) or [llama.cpp](https://github.com/ggml-org/llama.cpp) server as drop-in replacements – just set `OPENAI_BASE_URL` to your local endpoint
 - **Bilingual UI** – Deutsch & English, switchable at runtime
 - **Categorization** – Auto-categorize entries using a separate (faster) model, language-aware
 - **Smart filtering** – By category, bookmark/favorite/read status, full-text search, URL pattern, note content
 - **Read tracking** – Mark articles as read/unread directly from the list view
 - **RSS/Atom feed** – `/rss` endpoint with full filter support (category, URL, note, status), action links for automation
-- **Interactive topic map** – every entry positioned by semantic similarity on a zoomable 2D map (t-SNE), with category colors, date filters, hover previews, and semantic search
+- **Interactive topic map** – every entry positioned by semantic similarity on a zoomable 2D map (deterministic UMAP, pure Go), with category colors, date filters, hover previews, and semantic search
 - **RAG search API** – `GET/POST /api/search` returns the most relevant entries (title + summary + score) for a natural-language query, ready for AI tool calls
 - **SQLite** – Local storage, no database server needed
 - **Dark/Light mode** – Switchable theme, respects system preference
+
+## Custom Prompts via the Note
+
+Every entry has a **note** field. If the note names a prompt template from the `prompts/` directory, that template is used whenever a summary is generated for the entry (auto-summary when saving, batch processing, and the 🧠 button) instead of the default summary prompt:
+
+| Note contains | Template used | Produces |
+|---|---|---|
+| `chapters_EN` / `chapters_DE` | `prompts/chapters_EN.md` / `_DE.md` | video chapters with timestamps |
+| `categorize_EN` / `categorize_DE` | `prompts/categorize_*.md` | exactly one category |
+| `custom_prompt` | `prompts/custom_prompt.md` | example custom format (key message, bullet points, action item) |
+| `summary_EN` / `summary_DE` | `prompts/summary_*.md` | the default summary |
+| *empty or unknown* | `summary_EN.md` / `summary_DE.md` by UI language | the default summary |
+
+**How the template is picked**
+
+1. The whole note is checked for a template name, then each single word (words may be separated by spaces, commas, `/`, `|`, `:` …) – spelling may differ in case (`chapters_en` works too).
+2. Otherwise keywords apply: `kapitel`/`chapters` → chapters template, `kategorie`/`categorize` → categorize template.
+3. Otherwise the default `summary` template; the language variant matching the current UI language (`summary_DE`/`summary_EN`) is preferred, then the generic name.
+
+**Creating your own prompt**
+
+1. Drop a Markdown file into `prompts/` – the filename without `.md` is the value for the note (`my_prompt.md` → note `my_prompt`).
+2. Optional language variants `my_prompt_DE.md` / `my_prompt_EN.md` are preferred when the UI is set to German/English.
+3. Use `{{CONTENT}}` as the placeholder for the entry's text (`{{CATEGORIES}}` additionally fills the category list in categorize templates).
+4. Generate the summary – done.
+
+The detail view shows all available templates as **clickable chips below the note field** (click to insert them into the note), and `GET /api/prompts` lists them for tools. A commented example template lives in [`prompts/custom_prompt.md`](prompts/custom_prompt.md); the manuals describe the mechanism in detail ([DE](manual_DE.md#prompts-eigene-prompts-per-notiz), [EN](manual_EN.md#prompts-custom-prompts-via-the-note)).
 
 ## Quick Start
 
@@ -53,6 +82,8 @@ Instead of OpenAI, you can point FoundAItion to any OpenAI-compatible backend:
 - **[llama.cpp](https://github.com/ggml-org/llama.cpp)** – Run local GGUF models with its built-in OpenAI-compatible server
 
 Set `OPENAI_BASE_URL` to your local endpoint (e.g. `http://localhost:1234/v1`).
+
+Local models can take a while to load – the HTTP timeout for summary/embedding calls is at least 240 s (`LLM_TIMEOUT` in `.env`, larger values allowed).
 
 ### Topic Map / Embeddings
 
