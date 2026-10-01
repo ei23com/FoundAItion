@@ -132,7 +132,7 @@ Dann `http://localhost:8080` im Browser öffnen. Port über `LISTEN_PORT=9000` �
   - 📋 URL kopieren
   - 📝 Zusammenfassung als Markdown kopieren
   - ↗️ Im Browser öffnen
-- 🔃 **Inhalt neu laden** (im Editierbereich, neben „Zusammenfassung neu erstellen"): crawlt die Webseite erneut bzw. lädt die Untertitel neu (Englisch/Deutsch). Der Inhalt wird ersetzt, die **Zusammenfassung bleibt unverändert** – damit lassen sich alte Einträge korrigieren, deren Inhalt z. B. in der falschen Sprache geladen wurde. Ein vorhandener Titel wird nie überschrieben
+- 🔃 **Inhalt neu laden** (im Editierbereich, neben „Zusammenfassung neu erstellen"): crawlt die Webseite erneut bzw. lädt die Untertitel neu (Englisch/Deutsch). Der Inhalt wird ersetzt, die **Zusammenfassung bleibt unverändert** – damit lassen sich alte Einträge korrigieren, deren Inhalt z. B. in der falschen Sprache geladen wurde. Der Titel wird dabei aus dem HTML-Titel korrigiert (siehe „Webseiten-Scraping")
 - 🧠 **Zusammenfassung neu erstellen** (ersetzt das frühere „Zusammenfassung zurücksetzen"): erzeugt die Zusammenfassung aus dem aktuellen Inhalt neu – sie wird also nicht nur gelöscht, sondern neu geschrieben. Fehlt der Inhalt, wird er zuvor geladen. Schlägt der LLM-Aufruf fehl, bleibt die vorhandene Zusammenfassung erhalten
 - 🗑️ **Eintrag löschen** (mit Bestätigungsdialog)
 
@@ -196,6 +196,19 @@ Zusammenfassung und Themenkarte es nutzen. Optionen: `--out DIR`, `--manual` (nu
 
 ---
 
+## Webseiten-Scraping (Titel & Inhalt)
+
+Für Web-Einträge bestimmt FoundAItion Titel und Inhalt in einer festen Pipeline – ganz ohne Sonderbehandlung einzelner Seiten:
+
+1. **Laden** der Seite mit echtem Browser-User-Agent und Browser-Headern. Schlägt der Versuch fehl (manche Seiten blockieren z. B. den HTTP/2-Fingerprint des Go-Stacks mit `HTTP 419`, während Browser/`curl` 200 bekommen), wird **automatisch mit erzwungenem HTTP/1.1** erneut versucht.
+2. **Titel = HTML-Titel** (`<head><title>`, 1:1 übernommen). `<title>`-Tags aus SVG-Logos (z. B. „Electrek Logo") werden dabei **ignoriert** – das war früher die häufigste Ursache für falsche Titel. Fallbacks: `og:title`, erste `H1`.
+3. **Inhalt = Hauptartikel** per **Mozilla-Readability** (genau der Algorithmus hinter der Firefox-Leseansicht – entfernt Cookie-Banner, Navigation, Werbung, Paywall-Rahmen). Fallbacks: `<article>`/`<main>` mit Boilerplate-Filter, zuletzt der bereinigte `<body>`. Ist das Readability-Ergebnis dünn und die bereinigte Seite deutlich umfangreicher (z. B. Diskussions-/Forumseiten wie Hacker News), gewinnt die bereinigte Seite – so bleibt der Thread erhalten.
+4. **Kein sauberer Inhalt?** Dann bleibt der Inhalt **leer** – es wird **nie** eine Fehlermeldung als Inhalt gespeichert. Trage den Inhalt in dem Fall manuell in der Detailansicht ein (Titel und Zusammenfassung lassen sich dort ebenfalls bearbeiten).
+
+Der 🔃-Button „Inhalt neu laden" nutzt dieselbe Pipeline und korrigiert dabei auch falsche Alt-Titel.
+
+---
+
 ## Umgebungsvariablen
 
 | Variable | Default | Description |
@@ -250,7 +263,7 @@ Zusammenfassung und Themenkarte es nutzen. Optionen: `--out DIR`, `--manual` (nu
 | GET | `/api/feed/unread?id=X` | Set read=0 (als ungelesen markieren) |
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
 | GET | `/api/map` | Themenkarte: Status, Zähler und alle 2D-Punkte (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
-| POST | `/api/links/rescrape?id=N` | Lädt nur den Inhalt eines Eintrags neu (Webseite crawlen bzw. Untertitel holen); die Zusammenfassung bleibt unverändert. Ergänzt einen leeren Titel |
+| POST | `/api/links/rescrape?id=N` | Lädt nur den Inhalt eines Eintrags neu (Webseite crawlen bzw. Untertitel holen); die Zusammenfassung bleibt unverändert. Korrigiert den Titel aus dem HTML-Titel |
 | POST | `/api/links/resummarize?id=N` | Erstellt die Zusammenfassung aus dem aktuellen Inhalt neu (ersetzt den vorhandenen Text); fehlt der Inhalt, wird er zuvor geladen. Nutzt das Prompt-Template aus der Notiz |
 | GET | `/api/prompts` | Liste der verfügbaren Prompt-Templates (Dateinamen ohne `.md`) für die Notiz-Auswahl |
 | POST | `/api/map/embeddings` | Startet Embedding fehlender Punkte + Platzierung im Hintergrund (kleine Batches inkrementell; `?force=true` = alle Vektoren neu per voller UMAP) – gibt sofort `202` zurück |
@@ -322,7 +335,7 @@ Notizfeld alle verfügbaren Template-Namen als antippbare Vorschläge an
 ├── configapi.go         # Config API schema + handlers
 ├── handlers.go          # HTTP handlers (CRUD, RSS, Feed, Language)
 ├── types.go             # Data structures, scanLink, NullBool
-├── crawl.go             # Web crawling + markdown conversion
+├── scrape.go            # Scraping: HTML-Titel + Inhalts-Extraktion (Readability, Fallbacks)
 ├── openai.go            # OpenAI API + Whisper integration
 ├── youtube.go           # YouTube subtitle extraction
 ├── db.go                # SQLite connection + table creation

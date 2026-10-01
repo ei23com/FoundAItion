@@ -138,7 +138,7 @@ func TestResummarizeReplacesSummary(t *testing.T) {
 
 // Bei leerem Inhalt wird er zuvor geladen (Crawl) und dann zusammengefasst.
 func TestResummarizeFetchesMissingContent(t *testing.T) {
-	page := `<html><head><title>Seite</title></head><body><main>Frischer Seiteninhalt für die Zusammenfassung.</main></body></html>`
+	page := `<html><head><title>Seite</title></head><body><main><p>Frischer Seiteninhalt für die Zusammenfassung, lang genug für die Inhaltsprüfung: Dieser Absatz beschreibt ausführlich, worum es auf der Seite geht, und enthält damit deutlich mehr als hundert Zeichen.</p></main></body></html>`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, page)

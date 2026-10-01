@@ -132,7 +132,7 @@ Open `http://localhost:8080` in your browser. Change port via `LISTEN_PORT=9000`
   - 📋 Copy URL
   - 📝 Copy summary as Markdown
   - ↗️ Open in browser
-- 🔃 **Reload content** (in the edit area, next to "Regenerate summary"): re-crawls the web page or reloads the subtitles (English/German). The content is replaced, the **summary stays unchanged** – this fixes older entries whose content was loaded in the wrong language. An existing title is never overwritten
+- 🔃 **Reload content** (in the edit area, next to "Regenerate summary"): re-crawls the web page or reloads the subtitles (English/German). The content is replaced, the **summary stays unchanged** – this fixes older entries whose content was loaded in the wrong language. The title is corrected from the HTML title as well (see "Web scraping")
 - 🧠 **Regenerate summary** (replaces the former "Reset summary"): regenerates the summary from the current content, so it is not merely deleted but rewritten. If the content is missing it is fetched first. Should the LLM call fail, the existing summary stays in place
 - 🗑️ **Delete entry** (with confirmation dialog)
 
@@ -194,6 +194,19 @@ map can then use it. Options: `--out DIR`, `--manual` (human subtitles only), `-
 
 ---
 
+## Web scraping (title & content)
+
+For web entries, FoundAItion determines title and content through a fixed pipeline – with no per-site special cases:
+
+1. **Fetching** the page with a real browser user agent and browser headers. Should the attempt fail (some sites block e.g. the Go stack's HTTP/2 fingerprint with `HTTP 419` while browsers/`curl` get 200), it **automatically retries with HTTP/1.1 forced**.
+2. **Title = HTML title** (`<head><title>`, taken 1:1). `<title>` tags inside SVG logos (e.g. "Electrek Logo") are **ignored** – historically the most common cause of wrong titles. Fallbacks: `og:title`, first `H1`.
+3. **Content = main article** via **Mozilla Readability** (the exact algorithm behind Firefox's reader view – removes cookie banners, navigation, ads, paywall frames). Fallbacks: `<article>`/`<main>` with boilerplate filtering, finally the cleaned `<body>`. If the Readability result is thin and the cleaned page is much richer (e.g. discussion/forum threads like Hacker News), the cleaned page wins – keeping the thread intact.
+4. **No clean content?** Then the content stays **empty** – an error message is **never** stored as content. Enter the content manually in the detail view in that case (title and summary can be edited there as well).
+
+The 🔃 "Reload content" button uses the same pipeline and also corrects wrong legacy titles.
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -248,7 +261,7 @@ map can then use it. Options: `--out DIR`, `--manual` (human subtitles only), `-
 | GET | `/api/feed/unread?id=X` | Set read=0 (mark as unread) |
 | GET | `/api/feed/delete-summary?id=X` | Clear summary + content |
 | GET | `/api/map` | Topic map: status, counters and all 2D points (`status`: ready/embedding/projecting/waiting/needs-embeddings) |
-| POST | `/api/links/rescrape?id=N` | Reloads only an entry's content (crawl the page / fetch subtitles); the summary stays unchanged. Fills in an empty title |
+| POST | `/api/links/rescrape?id=N` | Reloads only an entry's content (crawl the page / fetch subtitles); the summary stays unchanged. Corrects the title from the HTML title |
 | POST | `/api/links/resummarize?id=N` | Regenerates the summary from the current content (replaces the existing text); fetches the content first if it is missing. Uses the prompt template named in the note |
 | GET | `/api/prompts` | List of available prompt templates (filenames without `.md`) for the note-based selection |
 | POST | `/api/map/embeddings` | Start background embedding+projection (`?force=true` = recompute all vectors) – returns `202` immediately |
@@ -319,7 +332,7 @@ available template names below the note field as clickable suggestions
 ├── configapi.go         # Config API schema + handlers
 ├── handlers.go          # HTTP handlers (CRUD, RSS, Feed, Language)
 ├── types.go             # Data structures, scanLink, NullBool
-├── crawl.go             # Web crawling + markdown conversion
+├── scrape.go            # Scraping: HTML title + content extraction (readability, fallbacks)
 ├── openai.go            # OpenAI API + Whisper integration
 ├── youtube.go           # YouTube subtitle extraction
 ├── db.go                # SQLite connection + table creation

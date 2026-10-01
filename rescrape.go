@@ -35,6 +35,7 @@ type resummarizeResponse struct {
 	ContentChars   int      `json:"content_chars"`
 	SummaryChars   int      `json:"summary_chars"`
 	ContentFetched bool     `json:"content_fetched,omitempty"` // Inhalt musste erst geladen werden
+	TitleUpdated   bool     `json:"title_updated,omitempty"`
 	Warnings       []string `json:"warnings,omitempty"`
 }
 
@@ -77,7 +78,7 @@ func (a *App) rescrapeLink(w http.ResponseWriter, r *http.Request) {
 		resp.Source = "web"
 	}
 
-	content, cerr := a.fetchLinkContent(link)
+	content, pageTitle, cerr := a.fetchLinkContent(link)
 	if cerr != nil {
 		log.Printf("[rescrape] id=%d %s failed: %v", id, resp.Source, cerr)
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Inhalt konnte nicht geladen werden: %v", cerr))
@@ -95,9 +96,10 @@ func (a *App) rescrapeLink(w http.ResponseWriter, r *http.Request) {
 	}
 	resp.ContentChars = len(content)
 
-	// Titel nur ergänzen, niemals einen vorhandenen (ggf. bearbeiteten) überschreiben.
-	if resp.Source == "web" && strings.TrimSpace(link.Title) == "" {
-		if title := truncateTitleMax(extractTitleFromMarkdown(content), 150); title != "" {
+	// Der HTML-Titel ist immer die beste Titelquelle – beim Neuladen wird er
+	// mitgeführt bzw. korrigiert (z. B. "Electrek Logo" → echter Seitentitel).
+	if resp.Source == "web" {
+		if title := truncateTitleMax(pageTitle, 150); title != "" && title != strings.TrimSpace(link.Title) {
 			if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "title" = ? WHERE "id" = ?`, TableName), title, id); uerr != nil {
 				resp.Warnings = append(resp.Warnings, fmt.Sprintf("Titel nicht gespeichert: %v", uerr))
 			} else {
@@ -153,7 +155,7 @@ func (a *App) resummarizeLink(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Eintrag %d hat weder Inhalt noch URL", id))
 			return
 		}
-		fetched, ferr := a.fetchLinkContent(link)
+		fetched, fetchedTitle, ferr := a.fetchLinkContent(link)
 		if ferr != nil {
 			log.Printf("[resummarize] id=%d content fetch failed: %v", id, ferr)
 			writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Inhalt konnte nicht geladen werden: %v", ferr))
@@ -165,6 +167,12 @@ func (a *App) resummarizeLink(w http.ResponseWriter, r *http.Request) {
 		}
 		content = fetched
 		resp.ContentFetched = true
+		// Fehlt der Titel komplett, gleich mit dem HTML-Titel füllen.
+		if strings.TrimSpace(link.Title) == "" && strings.TrimSpace(fetchedTitle) != "" {
+			if _, uerr := a.db.Exec(fmt.Sprintf(`UPDATE %s SET "title" = ? WHERE "id" = ?`, TableName), truncateTitleMax(fetchedTitle, 150), id); uerr == nil {
+				resp.TitleUpdated = true
+			}
+		}
 		if err := a.saveContent(id, content); err != nil {
 			log.Printf("[resummarize] id=%d save fetched content failed: %v", id, err)
 			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Inhalt konnte nicht gespeichert werden: %v", err))
@@ -221,26 +229,27 @@ func (a *App) getPrompts(w http.ResponseWriter, r *http.Request) {
 // ─── Helfer ──────────────────────────────────────────────────────────────────
 
 // fetchLinkContent holt den Inhalt einer URL: Untertitel bei YouTube, sonst
-// die gecrawlte Webseite. Gespeichert wird hier nichts.
-func (a *App) fetchLinkContent(link *Link) (string, error) {
+// die gecrawlte Webseite. Gespeichert wird hier nichts. Der zweite Rückgabewert
+// ist der HTML-Titel der Seite ("" bei YouTube bzw. wenn keiner ermittelbar).
+func (a *App) fetchLinkContent(link *Link) (string, string, error) {
 	if isYouTubeURL(link.URL) {
 		transcript, err := a.resolveYouTubeTranscript(link.URL)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		return strings.TrimSpace(transcript), nil
+		return strings.TrimSpace(transcript), "", nil
 	}
 
-	crawled, err := a.crawlPage(link.URL)
+	pageTitle, crawled, err := a.scrapeURL(link.URL)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	content := strings.TrimSpace(crawled)
 	// Wie beim Anlegen begrenzen, damit das Token-Limit nicht überschritten wird.
 	if max := int(float64(a.cfg.SummaryMaxTokens) * 3.5); max > 0 && len(content) > max {
 		content = content[:max]
 	}
-	return content, nil
+	return content, pageTitle, nil
 }
 
 // parseLinkID liest den id-Parameter; bei Fehlern antwortet sie bereits.

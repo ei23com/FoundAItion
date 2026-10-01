@@ -581,12 +581,13 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 		content = "" // content comes later from transcription
 		log.Printf("[linkshare] YouTube URL detected, title=%q", title)
 	} else {
-		crawled, err := a.crawlPage(urlStr)
+		pageTitle, crawled, err := a.scrapeURL(urlStr)
 		if err != nil {
-			log.Printf("[linkshare] crawl error: %v", err)
+			log.Printf("[linkshare] scrape error: %v", err)
 			title = ""
 		} else {
-			title = truncateTitleMax(extractTitleFromMarkdown(crawled), 150)
+			// Der HTML-Titel ist die beste Titelquelle (1:1, gekürzt).
+			title = truncateTitleMax(pageTitle, 150)
 			content = crawled[:minLen(len(crawled), int(float64(a.cfg.SummaryMaxTokens)*3.5))]
 		}
 	}
@@ -1021,9 +1022,9 @@ func (a *App) resolveContent(link Link) string {
 	}
 
 	if !isYouTubeURL(link.URL) {
-		crawled, err := a.crawlPage(link.URL)
+		_, crawled, err := a.scrapeURL(link.URL)
 		if err != nil {
-			log.Printf("[phase2] crawl failed for id=%d: %v", link.ID, err)
+			log.Printf("[phase2] scrape failed for id=%d: %v", link.ID, err)
 		} else {
 			if err := a.saveContent(link.ID, crawled); err != nil {
 				log.Printf("[phase2] save crawl failed for id=%d: %v", link.ID, err)

@@ -95,7 +95,7 @@ func TestRescrapeBusyGuard(t *testing.T) {
 // prüft, dass der alte Inhalt ersetzt und der leere Titel ergänzt wird.
 func TestRescrapeWebPage(t *testing.T) {
 	page := `<!doctype html><html><head><title>Neuer Seitentitel</title></head>
-	<body><main><h1>Neuer Seitentitel</h1><p>Frischer Inhalt der Webseite mit ausreichend Text.</p></main></body></html>`
+	<body><main><h1>Neuer Seitentitel</h1><p>Frischer Inhalt der Webseite mit ausreichend Text, damit die Extraktion genug Material sieht und der Test realistisch bleibt. Dieser Absatz enthält deutlich mehr als hundert Zeichen Fließtext.</p></main></body></html>`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, page)
@@ -157,15 +157,16 @@ func TestRescrapeWebPage(t *testing.T) {
 	}
 }
 
-// Ein vorhandener (ggf. bearbeiteter) Titel darf nicht überschrieben werden.
-func TestRescrapeKeepsExistingTitle(t *testing.T) {
+// Beim Neuladen wird der Titel aus dem HTML-Titel korrigiert (z. B. wenn beim
+// Anlegen ein Logo-Titel wie "Electrek Logo" herausgekommen war).
+func TestRescrapeUpdatesTitleFromHTMLTitle(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `<html><head><title>Seitentitel</title></head><body><main>Inhalt</main></body></html>`)
+		fmt.Fprint(w, `<html><head><title>Seitentitel</title></head><body><main><p>Langer ausführlicher Inhalt dieses Testdokuments, damit die Inhaltsprüfung zufrieden ist und genug Fließtext vorhanden ist.</p></main></body></html>`)
 	}))
 	defer srv.Close()
 
 	app := testAppWithDB(t, Config{})
-	id := insertTestLink(t, app, srv.URL, "Mein eigener Titel", "alt")
+	id := insertTestLink(t, app, srv.URL, "Electrek Logo", "alt")
 
 	if rec := rescrapeRequest(app, id, http.MethodPost); rec.Code != http.StatusOK {
 		t.Fatalf("Status %d: %s", rec.Code, rec.Body.String())
@@ -173,8 +174,29 @@ func TestRescrapeKeepsExistingTitle(t *testing.T) {
 
 	var title string
 	app.db.QueryRow(fmt.Sprintf(`SELECT "title" FROM %s WHERE "id" = ?`, TableName), id).Scan(&title)
-	if title != "Mein eigener Titel" {
-		t.Fatalf("Titel wurde überschrieben: %q", title)
+	if title != "Seitentitel" {
+		t.Fatalf("Titel = %q, erwartet \"Seitentitel\" (HTML-Titel)", title)
+	}
+}
+
+// Ist der Titel unverändert schon korrekt, wird er nicht (nochmal) geschrieben.
+func TestRescrapeKeepsIdenticalTitle(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<html><head><title>Seitentitel</title></head><body><main><p>Langer ausführlicher Inhalt dieses Testdokuments, damit die Inhaltsprüfung zufrieden ist und genug Fließtext vorhanden ist.</p></main></body></html>`)
+	}))
+	defer srv.Close()
+
+	app := testAppWithDB(t, Config{})
+	id := insertTestLink(t, app, srv.URL, "Seitentitel", "alt")
+
+	rec := rescrapeRequest(app, id, http.MethodPost)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Status %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp rescrapeResponse
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.TitleUpdated {
+		t.Fatalf("title_updated sollte false sein, Titel war schon korrekt")
 	}
 }
 
