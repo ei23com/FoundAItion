@@ -205,6 +205,28 @@ For web entries, FoundAItion determines title and content through a fixed pipeli
 
 The 🔃 "Reload content" button uses the same pipeline and also corrects wrong legacy titles.
 
+### Supplying the content yourself (content aggregation)
+
+Next to `url` and `note`, `POST /linkshare` accepts two optional fields:
+
+| Field | Effect |
+|-------|--------|
+| `content` | Full text of the entry. If set, the page is **not fetched at all** – no request, no scraping. The text is stored as delivered, only capped to the summary token limit. |
+| `title` | Title of the entry. Used whenever no HTML title is available: always when `content` is supplied, otherwise as a fallback when scraping fails. |
+
+```json
+{
+  "url": "https://example.org/article",
+  "note": "chapters",
+  "title": "Example article",
+  "content": "… the full article text …"
+}
+```
+
+This enables **external content aggregation**: your own scripts, reader-mode extractors, another LLM or a paid API can deliver the text for pages FoundAItion cannot read cleanly by itself (paywall, cookie wall, login). The entry is then processed as usual – summarized right away when `AUTO_SUMMARIZE` is on, otherwise later via 🧠, 🔃 or `/process-entries`.
+
+If the URL already exists but its content is still empty (e.g. because scraping failed earlier), the supplied content is added and the response is `"status":"updated"`. Existing content is **never** overwritten – that case keeps answering `"duplicate"`.
+
 ---
 
 ## Environment Variables
@@ -248,7 +270,7 @@ The 🔃 "Reload content" button uses the same pipeline and also corrects wrong 
 | DELETE | `/api/links?id=X` | Delete link |
 | GET | `/api/categories` | List categories with counts |
 | GET/POST | `/api/share` | Get link(s) by ID |
-| POST | `/linkshare` | Add link (`{"url":"...","note":"..."}`) |
+| POST | `/linkshare` | Add link: `{"url":"...","note":"...","title":"...","content":"..."}` – `title`/`content` optional, with `content` nothing is scraped ([details](#supplying-the-content-yourself-content-aggregation)) |
 | GET | `/process-entries` | Process pending entries (batch). **Auto-categorizes** all newly summarized entries afterwards |
 | GET | `/api/manual` | Get this manual (raw Markdown, `?lang=de` or `?lang=en`) |
 | GET | `/api/config` | Get configuration |

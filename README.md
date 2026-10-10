@@ -11,6 +11,7 @@ A **single-binary web application** for collecting, managing, and summarizing li
 - **Browser-grade web scraping** – Content is extracted as Markdown via [Mozilla Readability](https://github.com/go-shiori/go-readability) (the algorithm behind Firefox's reader view), which removes cookie banners, navigation, ads and paywall frames; the title always comes from the HTML `<head><title>` (SVG logo `<title>` tags are ignored), and blocked sites are retried over HTTP/1.1 – no per-site special cases
 - **Custom prompts via the note** – Put a template name like `chapters_EN` or `custom_prompt` into an entry's note and that `prompts/*.md` template is used for its summary instead of the default – see [Custom Prompts via the Note](#custom-prompts-via-the-note)
 - **Two separate refresh actions** – 🔃 **Reload content** (re-crawls the page or reloads subtitles, corrects the title, keeps the summary) and 🧠 **Regenerate summary** (rewrites the summary from the current content) – as UI buttons and as APIs
+- **External content aggregation (optional)** – `POST /linkshare` also accepts a full `content` (and `title`); when content is supplied the page is **not fetched at all**, so external tools can deliver the text themselves – see [Supplying the Content Yourself](#supplying-the-content-yourself-optional)
 - **YouTube support** – Automatic thumbnail display, playlist support, subtitle/Whisper transcription (English/German subtitles, human ones preferred; helper CLI `yt-sub en|de <url>` saves subtitles as `.srt`/`.txt` on disk or writes them into the entry)
 - **AI summaries** – Generate summaries via any OpenAI-compatible API (GPT, Claude, local LLMs); slow local model loading is tolerated (`LLM_TIMEOUT`, minimum 240 s)
 - **Local LLM support** – Use [LiteLLM](https://github.com/BerriAI/litellm) or [llama.cpp](https://github.com/ggml-org/llama.cpp) server as drop-in replacements – just set `OPENAI_BASE_URL` to your local endpoint
@@ -124,6 +125,30 @@ Use the free **[HTTP Shortcuts](https://github.com/Waboodoo/HTTP-Shortcuts)** ap
 4. Enable **"Share"** in the shortcut – it will appear in Android's share menu
    
 See the [manual](manual_EN.md#android-share-links-via-http-shortcuts) for more details.
+
+## Supplying the Content Yourself (optional)
+
+`POST /linkshare` accepts two optional fields next to `url` and `note`:
+
+| Field | Effect |
+|---|---|
+| `content` | Full text of the entry. If set, the page is **not fetched at all** (no request, no scraping). The text is stored as delivered, only capped to the summary token limit. |
+| `title` | Title of the entry. Used whenever no HTML title is available: always when `content` is supplied, otherwise as a fallback when scraping fails. |
+
+```json
+{
+  "url": "https://example.org/article",
+  "note": "chapters",
+  "title": "Example article",
+  "content": "… the full article text …"
+}
+```
+
+This enables **external content aggregation**: your own scripts, reader-mode extractors, another LLM or a paid API can deliver the text for pages FoundAItion cannot read cleanly by itself (paywall, cookie wall, login). The entry is then processed as usual – summarized right away when `AUTO_SUMMARIZE` is on, otherwise later via 🧠 or `/process-entries`.
+
+If the URL already exists but its content is still empty (e.g. because scraping failed earlier), the supplied content is added and the response is `"status":"updated"`. Existing content is **never** overwritten – that case keeps answering `"duplicate"`.
+
+See the [manual](manual_EN.md#supplying-the-content-yourself-content-aggregation) for details.
 
 ## Documentation
 

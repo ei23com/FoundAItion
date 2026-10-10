@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ─── HTTP Router ─────────────────────────────────────────────────────────────
@@ -535,8 +536,16 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[linkshare] received URL: %s", urlStr)
 
+	// Optional mitgelieferter Inhalt (externe Content-Aggregation).
+	// Ist "content" gesetzt, wird die Seite gar nicht geladen.
+	providedContent := strings.TrimSpace(req.Content)
+	providedTitle := strings.TrimSpace(req.Title)
+
 	// YouTube playlist: check first, no crawling needed
 	if isYouTubePlaylist(urlStr) {
+		if providedContent != "" {
+			log.Printf("[linkshare] NOTE: provided content is ignored for playlists")
+		}
 		a.handlePlaylistSubmission(w, urlStr, req.Note)
 		return
 	}
@@ -557,6 +566,25 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[linkshare] duplicate check error: %v", err)
 	}
 	if existingID > 0 {
+		// Existiert der Link schon, aber ohne Inhalt (z. B. weil das Scrapen an
+		// Cookie-Banner/Paywall gescheitert ist), wird der gelieferte Text ergänzt.
+		// Vorhandener Inhalt wird dabei nie überschrieben.
+		if providedContent != "" {
+			filled, ferr := a.fillExistingContent(existingID, providedContent, providedTitle)
+			if ferr != nil {
+				log.Printf("[linkshare] fill existing link %d error: %v", existingID, ferr)
+			} else if filled != "" {
+				log.Printf("[linkshare] link %d exists – external content added (%d chars)", existingID, len(filled))
+				a.startAutoSummary(existingID, filled, req.Note)
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(LinkAddResponse{
+					ID:      existingID,
+					Status:  "updated",
+					Message: fmt.Sprintf("Link %d already existed – external content was added.", existingID),
+				})
+				return
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(LinkAddResponse{
 			ID:      existingID,
@@ -570,7 +598,16 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 	var title string
 	var content string
 
-	if isYouTubeURL(urlStr) {
+	switch {
+	case providedContent != "":
+		// Kein HTTP-Request: Text und Titel kommen vom Aufrufer.
+		content = a.capContent(providedContent)
+		title = truncateTitleMax(providedTitle, 150)
+		if title == "" && isYouTubeURL(urlStr) {
+			title = truncateTitleMax(a.fetchYouTubeTitle(urlStr), 150)
+		}
+		log.Printf("[linkshare] external content supplied (%d chars), scraping skipped, title=%q", len(content), title)
+	case isYouTubeURL(urlStr):
 		title = truncateTitleMax(a.fetchYouTubeTitle(urlStr), 150)
 		if title == "" {
 			crawledTitle, err := extractYouTubePageTitle(urlStr)
@@ -580,15 +617,20 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 		}
 		content = "" // content comes later from transcription
 		log.Printf("[linkshare] YouTube URL detected, title=%q", title)
-	} else {
+	default:
 		pageTitle, crawled, err := a.scrapeURL(urlStr)
 		if err != nil {
 			log.Printf("[linkshare] scrape error: %v", err)
-			title = ""
+			// Inhalt bleibt leer (nie Fehlertext); ein mitgelieferter Titel
+			// wird trotzdem übernommen.
+			title = truncateTitleMax(providedTitle, 150)
 		} else {
 			// Der HTML-Titel ist die beste Titelquelle (1:1, gekürzt).
 			title = truncateTitleMax(pageTitle, 150)
-			content = crawled[:minLen(len(crawled), int(float64(a.cfg.SummaryMaxTokens)*3.5))]
+			if title == "" {
+				title = truncateTitleMax(providedTitle, 150)
+			}
+			content = a.capContent(crawled)
 		}
 	}
 
@@ -600,33 +642,8 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Auto-summary in background (web pages only)
-	if a.cfg.AutoSummarize && a.cfg.OpenAIKey != "" && !isYouTubeURL(urlStr) && strings.TrimSpace(content) != "" {
-		go func(linkID int64, c string) {
-			a.llmMu.Lock()
-			defer a.llmMu.Unlock()
-			lang := a.cfg.UILanguage
-			promptName := a.resolvePromptName(req.Note)
-			summary, err := a.generateSummary(c, promptName, lang)
-			if err != nil {
-				if strings.Contains(err.Error(), ErrTooLong) {
-					updateQ := fmt.Sprintf("UPDATE %s SET \"summary\" = ? WHERE \"id\" = ?", TableName)
-					_, _ = a.db.Exec(updateQ, "zu langer Text", linkID)
-					log.Printf("[auto-summary] id=%d content too long", linkID)
-					return
-				}
-				log.Printf("[auto-summary] id=%d error: %v", linkID, err)
-				return
-			}
-			updateQ := fmt.Sprintf("UPDATE %s SET \"summary\" = ? WHERE \"id\" = ?", TableName)
-			if _, err := a.db.Exec(updateQ, summary, linkID); err != nil {
-				log.Printf("[auto-summary] id=%d update error: %v", linkID, err)
-			} else {
-				log.Printf("[auto-summary] id=%d summarized (%d chars)", linkID, len(summary))
-				a.afterTextChange(linkID)
-			}
-		}(id, content)
-	}
+	// Auto-summary in background
+	a.startAutoSummary(id, content, req.Note)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(LinkAddResponse{
@@ -634,6 +651,85 @@ func (a *App) receiveLink(w http.ResponseWriter, r *http.Request) {
 		Status:  "ok",
 		Message: fmt.Sprintf("Link %d saved – waiting for processing.", id),
 	})
+}
+
+// startAutoSummary erzeugt im Hintergrund eine Zusammenfassung für einen Link.
+// Ohne Inhalt (z. B. YouTube – Transkript kommt später) passiert nichts.
+func (a *App) startAutoSummary(linkID int64, content, note string) {
+	if !a.cfg.AutoSummarize || a.cfg.OpenAIKey == "" || strings.TrimSpace(content) == "" {
+		return
+	}
+	go func(linkID int64, c string) {
+		a.llmMu.Lock()
+		defer a.llmMu.Unlock()
+		lang := a.cfg.UILanguage
+		promptName := a.resolvePromptName(note)
+		summary, err := a.generateSummary(c, promptName, lang)
+		if err != nil {
+			if strings.Contains(err.Error(), ErrTooLong) {
+				updateQ := fmt.Sprintf("UPDATE %s SET \"summary\" = ? WHERE \"id\" = ?", TableName)
+				_, _ = a.db.Exec(updateQ, "zu langer Text", linkID)
+				log.Printf("[auto-summary] id=%d content too long", linkID)
+				return
+			}
+			log.Printf("[auto-summary] id=%d error: %v", linkID, err)
+			return
+		}
+		updateQ := fmt.Sprintf("UPDATE %s SET \"summary\" = ? WHERE \"id\" = ?", TableName)
+		if _, err := a.db.Exec(updateQ, summary, linkID); err != nil {
+			log.Printf("[auto-summary] id=%d update error: %v", linkID, err)
+		} else {
+			log.Printf("[auto-summary] id=%d summarized (%d chars)", linkID, len(summary))
+			a.afterTextChange(linkID)
+		}
+	}(linkID, content)
+}
+
+// fillExistingContent ergänzt einen bereits vorhandenen Eintrag um extern
+// gelieferten Inhalt. Gefüllt wird nur, was leer ist – vorhandener Inhalt und
+// die vorhandene Notiz bleiben unangetastet. Rückgabe "" = nichts geändert.
+func (a *App) fillExistingContent(id int64, providedContent, providedTitle string) (string, error) {
+	link, err := a.fetchLinkByID(id, true)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(link.Content) != "" {
+		return "", nil
+	}
+
+	content := a.capContent(strings.TrimSpace(providedContent))
+	if content == "" {
+		return "", nil
+	}
+	if err := a.saveContent(id, content); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(link.Title) == "" {
+		if t := truncateTitleMax(providedTitle, 150); t != "" {
+			q := fmt.Sprintf(`UPDATE %s SET "title" = ? WHERE "id" = ?`, TableName)
+			if _, err := a.db.Exec(q, t, id); err != nil {
+				log.Printf("[linkshare] id=%d title update error: %v", id, err)
+			}
+		}
+	}
+	return content, nil
+}
+
+// capContent begrenzt Inhalt auf das Token-Limit der Zusammenfassung –
+// dieselbe Grenze wie beim Scrapen, damit Einträge nicht am Kontextfenster
+// des Modells scheitern.
+func (a *App) capContent(content string) string {
+	max := int(float64(a.cfg.SummaryMaxTokens) * 3.5)
+	if max <= 0 || len(content) <= max {
+		return content
+	}
+	cut := content[:max]
+	// keine halbe UTF-8-Sequenz am Ende hinterlassen
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[:len(cut)-1]
+	}
+	log.Printf("[linkshare] content truncated to %d chars (token limit %d)", len(cut), a.cfg.SummaryMaxTokens)
+	return cut
 }
 
 // handlePlaylistSubmission processes a YouTube playlist submission.

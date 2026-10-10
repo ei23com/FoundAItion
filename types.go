@@ -120,9 +120,15 @@ type ShareRequest struct {
 }
 
 // LinkAddRequest is the body for POST /linkshare.
+//
+// URL is required. Note, Title and Content are optional: when Content is set
+// the caller delivers the article text itself (external content aggregation)
+// and the page is never fetched.
 type LinkAddRequest struct {
-	URL  string `json:"url"`
-	Note string `json:"note"`
+	URL     string `json:"url"`
+	Note    string `json:"note"`
+	Title   string `json:"title"`   // optional: used when no HTML title is available
+	Content string `json:"content"` // optional: full text – skips scraping entirely
 }
 
 // LinkAddResponse is returned by POST /linkshare.

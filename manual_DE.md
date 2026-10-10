@@ -207,6 +207,28 @@ Für Web-Einträge bestimmt FoundAItion Titel und Inhalt in einer festen Pipelin
 
 Der 🔃-Button „Inhalt neu laden" nutzt dieselbe Pipeline und korrigiert dabei auch falsche Alt-Titel.
 
+### Inhalt selbst mitliefern (Content-Aggregation)
+
+`POST /linkshare` nimmt neben `url` und `note` zwei optionale Felder entgegen:
+
+| Feld | Wirkung |
+|------|---------|
+| `content` | Vollständiger Text des Eintrags. Ist es gesetzt, wird die Seite **gar nicht geladen** – kein HTTP-Request, kein Scraping. Der Text wird 1:1 gespeichert und nur auf das Token-Limit gekürzt. |
+| `title` | Titel des Eintrags. Wird immer dann genutzt, wenn kein HTML-Titel ermittelt wird: also immer bei mitgeliefertem `content`, sonst als Fallback, wenn das Scrapen scheitert. |
+
+```json
+{
+  "url": "https://example.org/artikel",
+  "note": "kapitel",
+  "title": "Beispielartikel",
+  "content": "… vollständiger Artikeltext …"
+}
+```
+
+Damit lassen sich **externe Content-Aggregatoren** anbinden: eigene Skripte, Reader-Mode-Extraktoren, ein anderes LLM oder eine bezahlte API liefern den Text für Seiten, die FoundAItion selbst nicht sauber auslesen kann (Paywall, Cookie-Wand, Login). Der Eintrag wird danach normal weiterverarbeitet – bei aktivem `AUTO_SUMMARIZE` sofort zusammengefasst, sonst später über 🧠, 🔃 oder `/process-entries`.
+
+Existiert die URL bereits, ist aber ihr Inhalt noch leer (z. B. weil das Scrapen gescheitert ist), wird der mitgelieferte Inhalt ergänzt – die Antwort lautet dann `"status":"updated"`. Vorhandener Inhalt wird **nie** überschrieben; in dem Fall bleibt es bei `"duplicate"`.
+
 ---
 
 ## Umgebungsvariablen
@@ -250,7 +272,7 @@ Der 🔃-Button „Inhalt neu laden" nutzt dieselbe Pipeline und korrigiert dabe
 | DELETE | `/api/links?id=X` | Delete link |
 | GET | `/api/categories` | List categories with counts |
 | GET/POST | `/api/share` | Get link(s) by ID |
-| POST | `/linkshare` | Add link (`{"url":"...","note":"..."}`) |
+| POST | `/linkshare` | Link hinzufügen: `{"url":"...","note":"...","title":"...","content":"..."}` – `title`/`content` optional, mit `content` wird nicht gescraped ([Details](#inhalt-selbst-mitliefern-content-aggregation)) |
 | GET | `/process-entries` | Verarbeitet anstehende Einträge (Batch). **Kategorisiert anschließend automatisch** alle neu zusammengefassten Einträge |
 | GET | `/api/manual` | Get this manual (raw Markdown) |
 | GET | `/api/config` | Get configuration |
