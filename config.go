@@ -12,31 +12,32 @@ import (
 
 // Config holds all configurable application parameters loaded from env / .env.
 type Config struct {
-	OpenAIKey             string // API key for OpenAI (or compatible API)
-	OpenAIModel           string // Currently selected model
-	OpenAIBaseURL         string // Base URL of the OpenAI-compatible API
-	AvailableModels       string // Comma-separated list of available models
-	WhisperURL            string // URL of the local Whisper server
-	WhisperModel          string // Whisper model (e.g. "large-v3")
-	WhisperAPIKey         string // Optional API key for Whisper auth
-	CrawlTimeoutSec       int    // Timeout per crawl request in seconds
-	YTDLPPath             string // Path to yt-dlp binary
-	YTDLAOutputDir        string // Output directory for downloaded audio files
-	YouTubeSubtitleMethod string // "whisper", "yt-dlp", "auto"
-	YouTubeSubLangs       string // Preferred subtitle languages (yt-dlp patterns, priority order)
-	YTDSubsDir            string // Output directory for the yt-sub helper tool
-	MaxProcessDays        int    // Max days backwards for processing (default: 14)
-	SummaryMaxTokens      int    // Maximum tokens for summary (default: 64000)
-	LLMTimeoutSec         int    // HTTP timeout for LLM calls; min. 240 s (model loading)
-	AutoSummarize         bool   // Auto-generate summary on add (default: true)
-	DBFile                string // SQLite file path (default: ./foundaition.db)
-	RssBaseURL            string // Base URL for RSS feed action links
-	RssItemCount          int    // Max entries in RSS feed (default: 30)
-	RssExtraActionLink    string // Extra action link template (e.g. "http://…/publish?id={id}")
-	UILanguage            string // UI language: "de" or "en" (default: "de")
-	CategoriesDE          string // German category list for auto-categorization
-	CategoriesEN          string // English category list for auto-categorization
-	CategorizeModel       string // Separate model for categorization (optional, defaults to OpenAIModel)
+	OpenAIKey              string // API key for OpenAI (or compatible API)
+	OpenAIModel            string // Currently selected model
+	OpenAIBaseURL          string // Base URL of the OpenAI-compatible API
+	AvailableModels        string // Comma-separated list of available models
+	WhisperURL             string // URL of the local Whisper server
+	WhisperModel           string // Whisper model (e.g. "large-v3")
+	WhisperAPIKey          string // Optional API key for Whisper auth
+	CrawlTimeoutSec        int    // Timeout per crawl request in seconds
+	YTDLPPath              string // Path to yt-dlp binary
+	YTDLAOutputDir         string // Output directory for downloaded audio files
+	YouTubeSubtitleMethod  string // "whisper", "yt-dlp", "auto"
+	YouTubeSubLangs        string // Preferred subtitle languages (yt-dlp patterns, priority order)
+	YTDSubsDir             string // Output directory for the yt-sub helper tool
+	MaxProcessDays         int    // Max days backwards for processing (default: 14)
+	SummaryMaxTokens       int    // Maximum tokens for summary input/context (default: 64000)
+	SummaryMaxOutputTokens int    // Maximum tokens the model may generate (default: 8192)
+	LLMTimeoutSec          int    // HTTP timeout for LLM calls; min. 240 s (model loading)
+	AutoSummarize          bool   // Auto-generate summary on add (default: true)
+	DBFile                 string // SQLite file path (default: ./foundaition.db)
+	RssBaseURL             string // Base URL for RSS feed action links
+	RssItemCount           int    // Max entries in RSS feed (default: 30)
+	RssExtraActionLink     string // Extra action link template (e.g. "http://…/publish?id={id}")
+	UILanguage             string // UI language: "de" or "en" (default: "de")
+	CategoriesDE           string // German category list for auto-categorization
+	CategoriesEN           string // English category list for auto-categorization
+	CategorizeModel        string // Separate model for categorization (optional, defaults to OpenAIModel)
 
 	// Vectormap / embeddings
 	EmbeddingBaseURL string // Base URL of the OpenAI-compatible /embeddings endpoint (default: OPENAI_BASE_URL)
@@ -68,31 +69,32 @@ func loadConfig() Config {
 	}
 
 	return Config{
-		OpenAIKey:             envOrDefault("OPENAI_API_KEY", ""),
-		OpenAIModel:           envOrDefault("OPENAI_MODEL", "gpt-4o-mini"),
-		OpenAIBaseURL:         envOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		AvailableModels:       envOrDefault("OPENAI_MODELS", "gpt-4o-mini,gpt-4o"),
-		WhisperURL:            envOrDefault("WHISPER_URL", "http://localhost:8081"),
-		WhisperModel:          envOrDefault("WHISPER_MODEL", "large-v3"),
-		WhisperAPIKey:         envOrDefault("WHISPER_API_KEY", ""),
-		CrawlTimeoutSec:       envIntOrDefault("CRAWL_TIMEOUT", 60),
-		YTDLPPath:             envOrDefault("YTDLP_PATH", getYTDLPPath()),
-		YTDLAOutputDir:        envOrDefault("YTDLA_OUTPUT_DIR", filepath.Join(getBinaryDir(), "audio_tmp")),
-		YouTubeSubtitleMethod: envOrDefault("YOUTUBE_SUBTITLE_METHOD", "auto"),
-		YouTubeSubLangs:       envOrDefault("YTDLP_SUB_LANGS", DefaultSubLangs),
-		YTDSubsDir:            envOrDefault("YT_SUBS_DIR", filepath.Join(getBinaryDir(), "subs")),
-		MaxProcessDays:        envIntOrDefault("MAX_PROCESS_DAYS", 14),
-		SummaryMaxTokens:      maxTokens,
-		LLMTimeoutSec:         envIntOrDefault("LLM_TIMEOUT", MinLLMTimeoutSec),
-		AutoSummarize:         autoSummarize,
-		DBFile:                envOrDefault("DB_FILE", "./foundaition.db"),
-		RssBaseURL:            envOrDefault("RSS_BASE_URL", ""),
-		RssItemCount:          envIntOrDefault("RSS_ITEM_COUNT", 30),
-		RssExtraActionLink:    envOrDefault("RSS_EXTRA_ACTION_LINK", ""),
-		UILanguage:            lang,
-		CategoriesDE:          envOrDefault("CATEGORIES_DE", "Künstliche Intelligenz,Social Media Marketing,Persönlichkeitsentwicklung & Produktivität,Philosophie & Psychologie,Politik,Wissenschaft,Wirtschaft & Finanzen,Technologie & Software,Unsortiert"),
-		CategoriesEN:          envOrDefault("CATEGORIES_EN", "Artificial Intelligence,Social Media Marketing,Personal Development & Productivity,Philosophy & Psychology,Politics,Science,Economy & Finance,Technology & Software,Uncategorized"),
-		CategorizeModel:       envOrDefault("CATEGORIZE_MODEL", ""),
+		OpenAIKey:              envOrDefault("OPENAI_API_KEY", ""),
+		OpenAIModel:            envOrDefault("OPENAI_MODEL", "gpt-4o-mini"),
+		OpenAIBaseURL:          envOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		AvailableModels:        envOrDefault("OPENAI_MODELS", "gpt-4o-mini,gpt-4o"),
+		WhisperURL:             envOrDefault("WHISPER_URL", "http://localhost:8081"),
+		WhisperModel:           envOrDefault("WHISPER_MODEL", "large-v3"),
+		WhisperAPIKey:          envOrDefault("WHISPER_API_KEY", ""),
+		CrawlTimeoutSec:        envIntOrDefault("CRAWL_TIMEOUT", 60),
+		YTDLPPath:              envOrDefault("YTDLP_PATH", getYTDLPPath()),
+		YTDLAOutputDir:         envOrDefault("YTDLA_OUTPUT_DIR", filepath.Join(getBinaryDir(), "audio_tmp")),
+		YouTubeSubtitleMethod:  envOrDefault("YOUTUBE_SUBTITLE_METHOD", "auto"),
+		YouTubeSubLangs:        envOrDefault("YTDLP_SUB_LANGS", DefaultSubLangs),
+		YTDSubsDir:             envOrDefault("YT_SUBS_DIR", filepath.Join(getBinaryDir(), "subs")),
+		MaxProcessDays:         envIntOrDefault("MAX_PROCESS_DAYS", 14),
+		SummaryMaxTokens:       maxTokens,
+		SummaryMaxOutputTokens: envIntOrDefault("SUMMARY_MAX_OUTPUT_TOKENS", DefaultSummaryMaxOutputTokens),
+		LLMTimeoutSec:          envIntOrDefault("LLM_TIMEOUT", MinLLMTimeoutSec),
+		AutoSummarize:          autoSummarize,
+		DBFile:                 envOrDefault("DB_FILE", "./foundaition.db"),
+		RssBaseURL:             envOrDefault("RSS_BASE_URL", ""),
+		RssItemCount:           envIntOrDefault("RSS_ITEM_COUNT", 30),
+		RssExtraActionLink:     envOrDefault("RSS_EXTRA_ACTION_LINK", ""),
+		UILanguage:             lang,
+		CategoriesDE:           envOrDefault("CATEGORIES_DE", "Künstliche Intelligenz,Social Media Marketing,Persönlichkeitsentwicklung & Produktivität,Philosophie & Psychologie,Politik,Wissenschaft,Wirtschaft & Finanzen,Technologie & Software,Unsortiert"),
+		CategoriesEN:           envOrDefault("CATEGORIES_EN", "Artificial Intelligence,Social Media Marketing,Personal Development & Productivity,Philosophy & Psychology,Politics,Science,Economy & Finance,Technology & Software,Uncategorized"),
+		CategorizeModel:        envOrDefault("CATEGORIZE_MODEL", ""),
 
 		EmbeddingBaseURL: envOrDefault("EMBEDDING_BASE_URL", ""), // "" → fall back to OPENAI_BASE_URL below
 		EmbeddingModel:   envOrDefault("EMBEDDING_MODEL", ""),
@@ -225,4 +227,19 @@ func (c Config) exceedsMaxTokens(content string) bool {
 // current token limit (for UI display).
 func (c Config) MaxCharsForCurrentTokenLimit() int {
 	return int(float64(c.SummaryMaxTokens) * charsPerToken)
+}
+
+// DefaultSummaryMaxOutputTokens ist das Standard-Ausgabelimit einer
+// Zusammenfassung. Zu kleine Werte schneiden die Antwort mitten im Text ab
+// (sichtbar an finish_reason "length") – vor allem bei langen Inhalten wie
+// Feeds mit vielen Einträgen.
+const DefaultSummaryMaxOutputTokens = 8192
+
+// summaryMaxOutputTokens liefert das Ausgabelimit (Token, die das Modell
+// erzeugen darf).
+func (c Config) summaryMaxOutputTokens() int {
+	if c.SummaryMaxOutputTokens <= 0 {
+		return DefaultSummaryMaxOutputTokens
+	}
+	return c.SummaryMaxOutputTokens
 }

@@ -41,6 +41,7 @@ var configSchema = []envConfigEntry{
 	{Key: "OPENAI_MODELS", Label: "Verfügbare Modelle", Description: "Kommagetrennte Liste (z.B. gpt-4o-mini,gpt-4o,claude-sonnet-4)", Section: "openai"},
 	{Key: "OPENAI_MODEL", Label: "Aktuelles Modell", Description: "Ausgewähltes Modell aus der Liste oben", Section: "openai", Type: "select"},
 	{Key: "SUMMARY_MAX_TOKENS", Label: "Max. Token (Zusammenfassung)", Description: "Token-Limit für die Zusammenfassung. Standard 64000.", Section: "openai", Type: "number"},
+	{Key: "SUMMARY_MAX_OUTPUT_TOKENS", Label: "Max. Ausgabe-Token (Zusammenfassung)", Description: "Wie viele Token das Modell pro Antwort erzeugen darf. Standard 8192; zu kleine Werte schneiden die Zusammenfassung ab (sie wird dann automatisch fortgesetzt).", Section: "openai", Type: "number"},
 	{Key: "AUTO_SUMMARIZE", Label: "Auto-Zusammenfassung", Description: "Zusammenfassung direkt beim Hinzufügen erstellen (true/false)", Section: "openai", Type: "select", Options: []string{"true", "false"}},
 
 	// ── Whisper ──
@@ -336,6 +337,10 @@ func (a *App) applyConfigValue(key, value string) {
 	case "SUMMARY_MAX_TOKENS":
 		if n, err := strconv.Atoi(value); err == nil {
 			a.cfg.SummaryMaxTokens = n
+		}
+	case "SUMMARY_MAX_OUTPUT_TOKENS":
+		if n, err := strconv.Atoi(value); err == nil {
+			a.cfg.SummaryMaxOutputTokens = n
 		}
 	case "DB_FILE":
 		a.cfg.DBFile = value

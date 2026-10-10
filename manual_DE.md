@@ -277,6 +277,7 @@ Passt ein Feed nicht komplett ins Token-Limit (`SUMMARY_MAX_TOKENS`), wird an ei
 | `OPENAI_MODELS` | `gpt-4o-mini,gpt-4o` | Comma-separated available models |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible API endpoint |
 | `SUMMARY_MAX_TOKENS` | `64000` | Max tokens for summary content (×3.5 chars/token) |
+| `SUMMARY_MAX_OUTPUT_TOKENS` | `8192` | Wie viele Token das Modell **pro Antwort** erzeugen darf. Erreicht die Zusammenfassung dieses Limit (`finish_reason: length`), wird sie automatisch nahtlos fortgesetzt (bis zu 3 Runden); bleibt sie danach immer noch unvollständig, wird sie sichtbar als abgeschnitten gekennzeichnet. Bei Denk-Modellen zählt das Reasoning mit ins Limit – zu kleine Werte liefern dann gar keinen Text |
 | `LLM_TIMEOUT` | `240` | HTTP-Timeout für LLM-Aufrufe (Zusammenfassung + Embeddings) in Sekunden. **Minimum 240 s**, weil lokale Modellserver ein Modell erst beim ersten Aufruf laden – kleinere Werte werden auf 240 angehoben, größere sind möglich |
 | `AUTO_SUMMARIZE` | `true` | Auto-generate summary on link add |
 | `WHISPER_URL` | `http://localhost:8081` | Local Whisper server URL |
