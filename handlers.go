@@ -719,7 +719,7 @@ func (a *App) fillExistingContent(id int64, providedContent, providedTitle strin
 // dieselbe Grenze wie beim Scrapen, damit Einträge nicht am Kontextfenster
 // des Modells scheitern.
 func (a *App) capContent(content string) string {
-	max := int(float64(a.cfg.SummaryMaxTokens) * 3.5)
+	max := a.contentLimitChars()
 	if max <= 0 || len(content) <= max {
 		return content
 	}
@@ -730,6 +730,12 @@ func (a *App) capContent(content string) string {
 	}
 	log.Printf("[linkshare] content truncated to %d chars (token limit %d)", len(cut), a.cfg.SummaryMaxTokens)
 	return cut
+}
+
+// contentLimitChars ist die Zeichengrenze, die sich aus dem Token-Limit für
+// Zusammenfassungen ergibt (≈ 3,5 Zeichen pro Token).
+func (a *App) contentLimitChars() int {
+	return int(float64(a.cfg.SummaryMaxTokens) * 3.5)
 }
 
 // handlePlaylistSubmission processes a YouTube playlist submission.

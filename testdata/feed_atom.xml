@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Beispiel-Blog</title>
+  <subtitle>Notizen zu Software und Technik</subtitle>
+  <link rel="self" href="https://example.org/feed.atom"/>
+  <link rel="alternate" type="text/html" href="https://example.org/"/>
+  <updated>2026-10-09T18:00:00Z</updated>
+  <entry>
+    <title>Warum UMAP statt t-SNE</title>
+    <link rel="alternate" type="text/html" href="https://example.org/umap"/>
+    <id>tag:example.org,2026:umap</id>
+    <published>2026-10-08T09:30:00Z</published>
+    <updated>2026-10-08T10:00:00Z</updated>
+    <author><name>Anna Beispiel</name></author>
+    <category term="Datenvisualisierung"/>
+    <category term="Go"/>
+    <summary>Ein kurzer Vergleich beider Verfahren &amp; warum UMAP hier besser passt.</summary>
+    <content type="html"><![CDATA[<p>t-SNE ist gut für Cluster, <strong>UMAP</strong> erhält zusätzlich die globale Struktur.</p><ul><li>Vorteil 1</li><li>Vorteil 2</li></ul><p>Mehr dazu im <a href="https://example.org/details">Detailartikel</a>.</p>]]></content>
+  </entry>
+  <entry>
+    <title>Kurzer Nachtrag</title>
+    <link rel="alternate" type="text/html" href="https://example.org/nachtrag"/>
+    <id>tag:example.org,2026:nachtrag</id>
+    <published>2026-10-09T07:15:00+02:00</published>
+    <author><name>Anna Beispiel</name></author>
+    <summary>Nur eine kurze Notiz ohne weiteren Inhalt.</summary>
+  </entry>
+</feed>

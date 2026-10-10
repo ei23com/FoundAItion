@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" >
+	<channel>
+		<title>r/LocalLLaMA | FreshRSS</title>
+		<link>http://10.1.1.11:2224</link>
+		<description>RSS-Feed von r/LocalLLaMA | FreshRSS</description>
+		<pubDate>Sat, 10 Oct 2026 18:51:53 +0200</pubDate>
+		<lastBuildDate>Sat, 10 Oct 2026 16:51:53 GMT</lastBuildDate>
+		<atom:link href="/i/?a=rss&amp;get=f_80&amp;state=3&amp;nb=500&amp;hours=168&amp;timestamp=1791626520001" rel="self" type="application/rss+xml" />
+				<item>
+			<title>OpenAI's math findings built on stolen user data</title>
+			<link>https://www.reddit.com/r/LocalLLaMA/comments/1x1rk4o/openais_math_findings_built_on_stolen_user_data/</link>
+						<dc:creator>/u/CuTe_M0nitor</dc:creator>
+			<category>r/LocalLLaMA</category>
+			<media:thumbnail url="https://external-preview.redd.it/8wdw3ugaVlNxaJ1exGG5R18eA4TmrdqJWh5n0P9Nms0.jpeg?width=320&amp;crop=smart&amp;auto=webp&amp;s=22f2de616fa5bde839fdb359e55e3e7997525be1" />
+			<media:content url="https://external-preview.redd.it/8wdw3ugaVlNxaJ1exGG5R18eA4TmrdqJWh5n0P9Nms0.jpeg?width=320&amp;crop=smart&amp;auto=webp&amp;s=22f2de616fa5bde839fdb359e55e3e7997525be1" medium="image"></media:content>
+			<description><![CDATA[<table> <tr><td> <a href="https://www.reddit.com/r/LocalLLaMA/comments/1x1rk4o/openais_math_findings_built_on_stolen_user_data/"> <img src="https://external-preview.redd.it/8wdw3ugaVlNxaJ1exGG5R18eA4TmrdqJWh5n0P9Nms0.jpeg?width=320&amp;crop=smart&amp;auto=webp&amp;s=22f2de616fa5bde839fdb359e55e3e7997525be1" alt="OpenAI's math findings built on stolen user data" title="OpenAI's math findings built on stolen user data"> </a> </td><td>   submitted by   <a href="https://www.reddit.com/user/CuTe_M0nitor"> /u/CuTe_M0nitor </a> <br> <span><a href="https://youtu.be/GweKOBSJvEY?is=bRO2MbQcJFA_B5As">[link]</a></span>   <span><a href="https://www.reddit.com/r/LocalLLaMA/comments/1x1rk4o/openais_math_findings_built_on_stolen_user_data/">[comments]</a></span> </td></tr></table>]]></description>
+			<pubDate>Fri, 09 Oct 2026 19:32:13 +0200</pubDate>
+			<guid isPermaLink="false">1791623106162049</guid>
+		</item>
+		<item>
+			<title>Qwen/Qwen-Image-2.1-Turbo · Hugging Face</title>
+			<link>https://www.reddit.com/r/LocalLLaMA/comments/1x1ldef/qwenqwenimage21turbo_hugging_face/</link>
+						<dc:creator>/u/chocofoxy</dc:creator>
+			<category>r/LocalLLaMA</category>
+			<media:thumbnail url="https://external-preview.redd.it/vw3dai0sDTCRVqshMa3KghjBX-ZT_IxYRsTYtcNyoOc.png?width=640&amp;crop=smart&amp;auto=webp&amp;s=06aa4f0db2bcf4563cd0c88682a168228bc05436" />
+			<media:content url="https://external-preview.redd.it/vw3dai0sDTCRVqshMa3KghjBX-ZT_IxYRsTYtcNyoOc.png?width=640&amp;crop=smart&amp;auto=webp&amp;s=06aa4f0db2bcf4563cd0c88682a168228bc05436" medium="image"></media:content>
+			<description><![CDATA[<table> <tr><td> <a href="https://www.reddit.com/r/LocalLLaMA/comments/1x1ldef/qwenqwenimage21turbo_hugging_face/"> <img src="https://external-preview.redd.it/vw3dai0sDTCRVqshMa3KghjBX-ZT_IxYRsTYtcNyoOc.png?width=640&amp;crop=smart&amp;auto=webp&amp;s=06aa4f0db2bcf4563cd0c88682a168228bc05436" alt="Qwen/Qwen-Image-2.1-Turbo · Hugging Face" title="Qwen/Qwen-Image-2.1-Turbo · Hugging Face"> </a> </td><td>   submitted by   <a href="https://www.reddit.com/user/chocofoxy"> /u/chocofoxy </a> <br> <span><a href="https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo">[link]</a></span>   <span><a href="https://www.reddit.com/r/LocalLLaMA/comments/1x1ldef/qwenqwenimage21turbo_hugging_face/">[comments]</a></span> </td></tr></table>]]></description>
+			<pubDate>Fri, 09 Oct 2026 15:28:14 +0200</pubDate>
+			<guid isPermaLink="false">1791623106162047</guid>
+		</item>
+	</channel>
+</rss>

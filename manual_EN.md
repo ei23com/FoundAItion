@@ -205,6 +205,8 @@ For web entries, FoundAItion determines title and content through a fixed pipeli
 
 The 🔃 "Reload content" button uses the same pipeline and also corrects wrong legacy titles.
 
+RSS/Atom feeds do not use this pipeline but a separate path → [Feeds (RSS & Atom)](#feeds-rss--atom).
+
 ### Supplying the content yourself (content aggregation)
 
 Next to `url` and `note`, `POST /linkshare` accepts two optional fields:
@@ -226,6 +228,38 @@ Next to `url` and `note`, `POST /linkshare` accepts two optional fields:
 This enables **external content aggregation**: your own scripts, reader-mode extractors, another LLM or a paid API can deliver the text for pages FoundAItion cannot read cleanly by itself (paywall, cookie wall, login). The entry is then processed as usual – summarized right away when `AUTO_SUMMARIZE` is on, otherwise later via 🧠, 🔃 or `/process-entries`.
 
 If the URL already exists but its content is still empty (e.g. because scraping failed earlier), the supplied content is added and the response is `"status":"updated"`. Existing content is **never** overwritten – that case keeps answering `"duplicate"`.
+
+## Feeds (RSS & Atom)
+
+Feeds are XML and do **not** go through the HTML/Readability pipeline – that would produce an unstructured blob: leftover CDATA markers (`]]&gt;`), huge preview-image URLs and no separation between items. With a feed holding 500 items, practically only the first one survived.
+
+FoundAItion therefore recognises feeds generically by their root element (`<rss>`, `<feed>`, `<rdf:RDF>`) – independent of host and content type – and parses them structurally:
+
+- **Entry title** = feed title (e.g. `r/LocalLLaMA | FreshRSS`)
+- **Per feed item**: date (normalised to `YYYY-MM-DD hh:mm`), title, link, author, categories as well as `description`/`summary` and – when substantially richer – `content`
+- **Preview-image URLs, CDATA leftovers and empty links are dropped**; HTML descriptions are converted to compact Markdown
+- Items without any text keep at least their image URL (`- image: …`)
+
+The format is deliberately YAML-like and still valid Markdown:
+
+```markdown
+feed: r/LocalLLaMA | FreshRSS
+link: http://10.1.1.11:2224
+description: RSS feed of r/LocalLLaMA | FreshRSS
+updated: 2026-10-10 17:47
+items: 28
+
+## OpenAI's math findings built on stolen user data
+
+- date: 2026-10-09 19:32
+- link: https://www.reddit.com/r/LocalLLaMA/comments/1x1rk4o/openais_math_findings_built_on_stolen_user_data/
+- author: /u/CuTe_M0nitor
+- category: r/LocalLLaMA
+
+submitted by /u/CuTe_M0nitor [link](…) [comments](…)
+```
+
+If a feed does not fit into the token limit (`SUMMARY_MAX_TOKENS`), it is cut at an item boundary and the number of omitted items is noted (`… N weitere Einträge ausgelassen (Zeichenlimit)`). The 🔃 "Reload content" button uses the same feed path, as does the automatic summary.
 
 ---
 

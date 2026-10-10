@@ -268,8 +268,20 @@ func contentTooLow(content string) bool {
 	return len([]rune(content)) < minCleanLen
 }
 
-// extractPage extrahiert Titel und Inhalt aus rohem HTML.
+// extractPage extrahiert Titel und Inhalt aus rohem HTML oder XML.
 func extractPage(rawHTML []byte, pageURL string) (string, string, error) {
+	return extractPageLimit(rawHTML, pageURL, 0)
+}
+
+// extractPageLimit wie extractPage, begrenzt den Inhalt aber auf maxChars
+// (0 = unbegrenzt). RSS-/Atom-Feeds werden strukturiert ausgewertet – HTML-
+// Parsing bzw. Readability würde daraus einen unstrukturierten Textbrei machen,
+// aus dem bei vielen Einträgen praktisch nur der erste übrig bleibt.
+func extractPageLimit(rawHTML []byte, pageURL string, maxChars int) (string, string, error) {
+	if feedRootElement(rawHTML) != "" {
+		return extractFeedPage(rawHTML, pageURL, maxChars)
+	}
+
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(rawHTML))
 	if err != nil {
 		return "", "", fmt.Errorf("HTML konnte nicht gelesen werden: %w", err)
@@ -284,15 +296,15 @@ func extractPage(rawHTML []byte, pageURL string) (string, string, error) {
 	return title, content, nil
 }
 
-// scrapeURL lädt eine Webseite und liefert Titel (HTML-Titel, 1:1) und
-// Inhalt als Markdown. Bei Fehlern bleibt der Inhalt leer – niemals wird
-// eine Fehlermeldung als Inhalt geliefert.
+// scrapeURL lädt eine Webseite oder einen Feed und liefert Titel (HTML-/Feed-
+// Titel, 1:1) und Inhalt als Markdown. Bei Fehlern bleibt der Inhalt leer –
+// niemals wird eine Fehlermeldung als Inhalt geliefert.
 func (a *App) scrapeURL(rawURL string) (string, string, error) {
 	rawHTML, err := a.fetchHTML(rawURL)
 	if err != nil {
 		return "", "", fmt.Errorf("Seite konnte nicht geladen werden: %w", err)
 	}
-	return extractPage(rawHTML, rawURL)
+	return extractPageLimit(rawHTML, rawURL, a.contentLimitChars())
 }
 
 // extractYouTubePageTitle holt den Originaltitel einer YouTube-Seite

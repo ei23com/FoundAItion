@@ -207,6 +207,8 @@ Für Web-Einträge bestimmt FoundAItion Titel und Inhalt in einer festen Pipelin
 
 Der 🔃-Button „Inhalt neu laden" nutzt dieselbe Pipeline und korrigiert dabei auch falsche Alt-Titel.
 
+RSS-/Atom-Feeds laufen nicht durch diese Pipeline, sondern über einen eigenen Pfad → [Feeds (RSS & Atom)](#feeds-rss--atom).
+
 ### Inhalt selbst mitliefern (Content-Aggregation)
 
 `POST /linkshare` nimmt neben `url` und `note` zwei optionale Felder entgegen:
@@ -228,6 +230,38 @@ Der 🔃-Button „Inhalt neu laden" nutzt dieselbe Pipeline und korrigiert dabe
 Damit lassen sich **externe Content-Aggregatoren** anbinden: eigene Skripte, Reader-Mode-Extraktoren, ein anderes LLM oder eine bezahlte API liefern den Text für Seiten, die FoundAItion selbst nicht sauber auslesen kann (Paywall, Cookie-Wand, Login). Der Eintrag wird danach normal weiterverarbeitet – bei aktivem `AUTO_SUMMARIZE` sofort zusammengefasst, sonst später über 🧠, 🔃 oder `/process-entries`.
 
 Existiert die URL bereits, ist aber ihr Inhalt noch leer (z. B. weil das Scrapen gescheitert ist), wird der mitgelieferte Inhalt ergänzt – die Antwort lautet dann `"status":"updated"`. Vorhandener Inhalt wird **nie** überschrieben; in dem Fall bleibt es bei `"duplicate"`.
+
+## Feeds (RSS & Atom)
+
+Feeds sind XML und laufen **nicht** durch die HTML-/Readability-Pipeline – daraus entstünde ein unstrukturierter Textbrei: CDATA-Reste (`]]&gt;`), riesige Vorschaubild-URLs und keine Trennung zwischen den Einträgen. Bei einem Feed mit 500 Einträgen blieb am Ende praktisch nur der erste übrig.
+
+FoundAItion erkennt Feeds deshalb generisch am Wurzelelement (`<rss>`, `<feed>`, `<rdf:RDF>`) – unabhängig von Host und Content-Type – und wertet sie strukturiert aus:
+
+- **Titel des Eintrags** = Feed-Titel (z. B. `r/LocalLLaMA | FreshRSS`)
+- **Pro Feed-Eintrag**: Datum (normalisiert auf `JJJJ-MM-TT hh:mm`), Titel, Link, Autor, Kategorie(n) sowie `description`/`summary` und – falls deutlich umfangreicher – `content`
+- **Vorschaubild-URLs, CDATA-Reste und leere Links entfallen**; HTML-Beschreibungen werden zu kompaktem Markdown aufbereitet
+- Einträge ganz ohne Text behalten wenigstens ihre Bild-URL (`- image: …`)
+
+Das Format ist bewusst YAML-artig und zugleich gültiges Markdown:
+
+```markdown
+feed: r/LocalLLaMA | FreshRSS
+link: http://10.1.1.11:2224
+description: RSS-Feed von r/LocalLLaMA | FreshRSS
+updated: 2026-10-10 17:47
+items: 28
+
+## OpenAI's math findings built on stolen user data
+
+- date: 2026-10-09 19:32
+- link: https://www.reddit.com/r/LocalLLaMA/comments/1x1rk4o/openais_math_findings_built_on_stolen_user_data/
+- author: /u/CuTe_M0nitor
+- category: r/LocalLLaMA
+
+submitted by /u/CuTe_M0nitor [link](…) [comments](…)
+```
+
+Passt ein Feed nicht komplett ins Token-Limit (`SUMMARY_MAX_TOKENS`), wird an einer Eintragsgrenze abgeschnitten und die Zahl der ausgelassenen Einträge vermerkt (`… N weitere Einträge ausgelassen (Zeichenlimit)`). Der 🔃-Button „Inhalt neu laden" nutzt denselben Feed-Pfad, ebenso die automatische Zusammenfassung.
 
 ---
 
