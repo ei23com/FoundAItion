@@ -4510,29 +4510,36 @@ if (configOverlay) {
         if (e.target === configOverlay) closeConfig();
     });
 
-    // Config action buttons (e.g. update yt-dlp)
-    document.querySelectorAll('.config-update-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const action = btn.dataset.action;
-            if (action === 'update-ytdlp') {
-                btn.textContent = '⏳ Downloading...';
-                btn.disabled = true;
-                try {
-                    const r = await fetch('/api/update-ytdlp', { method: 'POST' });
-                    const data = await r.json();
-                    if (data.ok === 'true') {
-                        showToast('✅ yt-dlp updated');
-                    } else {
-                        showToast('❌ ' + (data.error || 'update failed'));
-                    }
-                } catch (e) {
-                    showToast('❌ ' + e.message);
-                } finally {
-                    btn.textContent = '⬇️ yt-dlp aktualisieren';
-                    btn.disabled = false;
+}
+
+// Config-Aktionsbuttons (z. B. "yt-dlp aktualisieren").
+// Wichtig: der Inhalt des Konfig-Modals wird bei jedem Öffnen neu gerendert,
+// deshalb wird das Klick-Ereignis delegiert (ein Listener am Container) statt
+// beim Laden direkt an die Buttons gehängt.
+if (configBody) {
+    configBody.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.config-update-btn');
+        if (!btn) return;
+
+        if (btn.dataset.action === 'update-ytdlp') {
+            const label = btn.textContent;
+            btn.textContent = '⏳ Downloading...';
+            btn.disabled = true;
+            try {
+                const r = await fetch('/api/update-ytdlp', { method: 'POST' });
+                const data = await r.json().catch(() => ({}));
+                if (data.ok === 'true') {
+                    showToast('✅ ' + (data.message || 'yt-dlp updated'));
+                } else {
+                    showToast('❌ ' + (data.error || ('HTTP ' + r.status)));
                 }
+            } catch (err) {
+                showToast('❌ ' + err.message);
+            } finally {
+                btn.textContent = label;
+                btn.disabled = false;
             }
-        });
+        }
     });
 }
 
