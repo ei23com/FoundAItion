@@ -246,6 +246,12 @@ func extractYouTubeCanonicalURL(url string) string {
 // frühere Version nutzte ".*-orig" und damit *jede* Original-Spur – YouTube
 // liefert dabei oft Arabisch, das dann alphabetisch vor Englisch gewann.
 //
+// Bei Videos mit automatischer Synchronisierung ("dubbed-auto") liegt der
+// Originaltext in "<sprache>-orig" (z. B. "en-orig"); die reinen Codes sind dort
+// Übersetzungen aus der Synchronfassung und werden von YouTube zusätzlich mit
+// HTTP 429 abgewiesen. "-orig" gewinnt deshalb innerhalb einer Sprache, und
+// angefragt werden die "-orig"-Spuren zuerst (siehe narrowSubLangs).
+//
 // Liefert einen leeren String zurück, wenn keine passenden Untertitel
 // verfügbar sind (kein Fehler).
 func (a *App) extractYouTubeSubtitles(url string) (string, error) {
@@ -273,7 +279,12 @@ func (a *App) extractYouTubeSubtitles(url string) (string, error) {
 		return "", err
 	}
 
-	best := pickSubtitleFile(res.Files, patterns, res.VideoLang)
+	best := pickSubtitle(subSelect{
+		Files:       res.Files,
+		Patterns:    patterns,
+		VideoLang:   res.VideoLang,
+		ManualLangs: res.ManualLangs,
+	})
 	if best == "" {
 		if len(res.Files) > 0 {
 			// Sollte mit eingeschränktem --sub-langs nicht vorkommen; hilft beim Debuggen.
@@ -294,7 +305,9 @@ func (a *App) extractYouTubeSubtitles(url string) (string, error) {
 
 	// Untertitel in das vereinfachte Format konvertieren (SRT oder VTT)
 	simple := convertSubtitleToSimple(srtContent)
-	log.Printf("[yt-dlp subs] lang=%s video=%s %d chars -> %d chars (simple)", srtLangTag(best), res.VideoLang, len(srtContent), len(simple))
+	log.Printf("[yt-dlp subs] lang=%s (%s) video=%s %d chars -> %d chars (simple)",
+		srtLangTag(best), trackOrigin(res.ManualLangs, srtLangTag(best)),
+		res.VideoLang, len(srtContent), len(simple))
 	if strings.TrimSpace(res.Output) != "" {
 		log.Printf("[yt-dlp subs] %s", strings.TrimSpace(res.Output))
 	}

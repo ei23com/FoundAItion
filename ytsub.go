@@ -36,6 +36,10 @@ Sprache:
   Sprachcode (en, de) oder yt-dlp-Muster (z. B. "en.*", "de-DE", ".*-orig").
   Priorität bei mehreren Angaben: erst Originalspur ("-orig"), dann Reihenfolge.
   Mehrere Sprachen mit Komma trennen.
+  Bei Videos mit automatischer Synchronisierung ("dubbed-auto") enthält die
+  Originalspur (en-orig, de-orig) den Text der Original-Tonspur; die reinen
+  Codes (en, de) sind dort Übersetzungen aus der Synchronfassung. "-orig"
+  wird deshalb bevorzugt.
 
 Optionen:
   --out DIR      Zielverzeichnis (Default: YT_SUBS_DIR bzw. ./subs)
@@ -49,6 +53,8 @@ Optionen:
 Ausgabe (im Zielverzeichnis):
   <videoID>.<sprache>-fixed.srt   bereinigte SRT-Datei (srt_fix-Plugin)
   <videoID>.<sprache>.txt         konvertiertes "HH:MM:SS Text"-Transkript
+  Beispiele für <sprache>: "en", "de" (menschlich/Übersetzung) oder
+  "en-orig", "de-orig" (Untertitel der Original-Tonspur).
 `
 
 // splitFlagsAndArgs trennt Flags von den Positionsargumenten (<sprache>, <url>),
@@ -214,8 +220,9 @@ func runYTSubDownload(app *App, opt ytSubOptions) int {
 	}
 
 	var (
-		files     []string
-		videoLang string
+		files       []string
+		videoLang   string
+		manualLangs []string
 	)
 	for _, a := range attempts {
 		fmt.Printf("→ yt-dlp: %s Untertitel (%s) …\n", a.label, langList)
@@ -237,6 +244,7 @@ func runYTSubDownload(app *App, opt ytSubOptions) int {
 		if len(res.Files) > 0 {
 			files = res.Files
 			videoLang = res.VideoLang
+			manualLangs = res.ManualLangs
 			break
 		}
 		fmt.Printf("  keine %s Untertitel in %s gefunden\n", a.label, langList)
@@ -248,7 +256,12 @@ func runYTSubDownload(app *App, opt ytSubOptions) int {
 		return 1
 	}
 
-	best := pickSubtitleFile(files, patterns, videoLang)
+	best := pickSubtitle(subSelect{
+		Files:       files,
+		Patterns:    patterns,
+		VideoLang:   videoLang,
+		ManualLangs: manualLangs,
+	})
 	if best == "" {
 		fmt.Fprintf(os.Stderr, "\nKeine passende Spur gefunden (Videosprache: %q).\n", videoLang)
 		fmt.Fprintf(os.Stderr, "Geladen wurden: %s\n", strings.Join(files, ", "))
@@ -279,7 +292,8 @@ func runYTSubDownload(app *App, opt ytSubOptions) int {
 	}
 
 	// ─── Ergebnis ─────────────────────────────────────────────────────────
-	fmt.Printf("\n✓ Sprache: %s (Videosprache: %s, %d → %d Zeichen)\n", langTag, videoLangOrUnknown(videoLang), len(subContent), len(simple))
+	fmt.Printf("\n✓ Sprache: %s – %s (Videosprache: %s, %d → %d Zeichen)\n",
+		langTag, trackOrigin(manualLangs, langTag), videoLangOrUnknown(videoLang), len(subContent), len(simple))
 	fmt.Printf("  Datei:      %s\n", srtPath)
 	fmt.Printf("  Transkript: %s\n", txtPath)
 

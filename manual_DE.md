@@ -170,8 +170,17 @@ Jeder Eintrag wird per Embedding-Vektor auf einer interaktiven 2D-Karte position
 Bei englischen Videos wird die englische Spur genutzt, bei deutschen die deutsche – erkannt über die im Video
 gesprochene Sprache. Innerhalb einer Sprache haben **menschliche** Untertitel Vorrang vor automatischen
 (`srt_fix` bereinigt automatische Rollzeilen). Passt keine Spur, wird bewusst kein Transkript erzeugt
-(kein fremdsprachiges Material). Anfragen bleiben minimal (`en,en-orig,de,de-orig`); nur wenn das nichts
-liefert, wird breiter gesucht – das schont YouTubes Ratelimit (HTTP 429).
+(kein fremdsprachiges Material).
+
+**Automatische Synchronisierung ("dubbed-auto"):** Synchronisiert YouTube ein Video automatisch in andere
+Sprachen, heißen die Spuren der Original-Tonspur `<sprache>-orig` (`yt-sub --list` zeigt z. B. `en-orig`,
+`de-orig`). Nur diese Spuren enthalten den gesprochenen Originaltext; die reinen Codes (`en`, `de`) sind dort
+Übersetzungen aus einer Synchronfassung und antworten zusätzlich häufig mit **HTTP 429**. Die Pipeline fragt
+deshalb zuerst die `-orig`-Spuren an (`en.*-orig,de.*-orig` – inklusive Regionalformen wie `en-US-orig`),
+lädt mit `--ignore-errors` weiter, wenn eine einzelne Sprache scheitert, und bevorzugt innerhalb einer Sprache
+menschliche Untertitel → `-orig` → reine Codes. Ohne diese Reihenfolge brach yt-dlp beim ersten 429 ab und das
+Video blieb ohne Transkript. Nur wenn die schmale Liste nichts liefert, wird breiter gesucht – das schont
+YouTubes Ratelimit.
 
 **Manueller Helfer**, wenn die Pipeline einmal keine Untertitel findet:
 
@@ -189,6 +198,10 @@ und ruft intern `./foundaition yt-sub …` auf. Es speichert im Zielverzeichnis 
 |-------|--------|
 | `<videoID>.<sprache>.srt` | heruntergeladene Untertitel (bzw. `.vtt`, wenn nur VTT vorliegt) |
 | `<videoID>.<sprache>.txt` | dasselbe im Programmformat `HH:MM:SS Text` (wie Spalte `content`) |
+
+Als `<sprache>` erscheint `en` bzw. `de` (menschliche Untertitel oder Übersetzung) oder `en-orig`/`de-orig`
+(Untertitel der Original-Tonspur, siehe oben). Die Auswahl wird mit ihrer Herkunft gemeldet, z. B.
+`✓ Sprache: en-orig – Originalspur (Videosprache: en-US, 48230 → 27796 Zeichen)`.
 
 Ist die URL in der Datenbank vorhanden, wird das Transkript direkt in `content` geschrieben – danach können
 Zusammenfassung und Themenkarte es nutzen. Optionen: `--out DIR`, `--manual` (nur menschliche Untertitel),
@@ -284,7 +297,7 @@ Passt ein Feed nicht komplett ins Token-Limit (`SUMMARY_MAX_TOKENS`), wird an ei
 | `WHISPER_MODEL` | `large-v3` | Whisper model |
 | `CRAWL_TIMEOUT` | `60` | Timeout per crawl request (seconds) |
 | `YTDLP_PATH` | auto-detect | Path to yt-dlp binary |
-| `YTDLP_SUB_LANGS` | `en.*,de.*` | Bevorzugte Untertitelsprachen (yt-dlp-Muster, Prioritätsreihenfolge). Englische Videos nutzen die englische, deutsche die deutsche Spur. Nie `.*-orig` setzen – das lädt jede Original-Spur (bei englischen Videos oft Arabisch). |
+| `YTDLP_SUB_LANGS` | `en.*,de.*` | Bevorzugte Untertitelsprachen (yt-dlp-Muster, Prioritätsreihenfolge). Englische Videos nutzen die englische, deutsche die deutsche Spur. Innerhalb einer Sprache gewinnen menschliche Untertitel, dann die Originalspur (`-orig`), dann reine Codes. Nie `.*-orig` setzen – das lädt jede Original-Spur (bei englischen Videos oft Arabisch). |
 | `YT_SUBS_DIR` | `./subs` | Zielverzeichnis des manuellen Helfers `yt-sub` |
 | `MAX_PROCESS_DAYS` | `14` | Max days backwards for batch processing |
 | `RSS_BASE_URL` | *(leer)* | Basis-URL für Feed-Links (z.B. bei Reverse Proxy). Leer = automatisch aus dem Request-Host. |

@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestDefaultSubLangsGuard stellt sicher, dass die Sprachvorgabe nie wieder auf
 // ".*-orig" zurückfällt: dieses Muster lud jede Original-Spur (bei englischen
@@ -65,7 +68,7 @@ func TestPickSubtitleFileEnglishVideo(t *testing.T) {
 		"3SBf7hD0sEw.en-orig.srt",
 		"3SBf7hD0sEw.en-orig-fixed.srt",
 	}
-	got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), "")
+	got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: ""})
 	if got != "3SBf7hD0sEw.en-orig-fixed.srt" {
 		t.Fatalf("gewählt: %q, erwartet englische Originalspur", got)
 	}
@@ -79,7 +82,7 @@ func TestPickSubtitleFileGermanVideo(t *testing.T) {
 		"abc12345678.en.srt",
 		"abc12345678.en-fixed.srt",
 	}
-	got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), "")
+	got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: ""})
 	if got != "abc12345678.de-orig-fixed.srt" {
 		t.Fatalf("gewählt: %q, erwartet deutsche Originalspur", got)
 	}
@@ -88,10 +91,10 @@ func TestPickSubtitleFileGermanVideo(t *testing.T) {
 // Nur übersetzte Fassungen (keine -orig-Spur): Musterreihenfolge entscheidet.
 func TestPickSubtitleFileTranslatedOnly(t *testing.T) {
 	files := []string{"abc12345678.ar.srt", "abc12345678.en.srt", "abc12345678.de.srt"}
-	if got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), ""); got != "abc12345678.en.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: ""}); got != "abc12345678.en.srt" {
 		t.Fatalf("gewählt: %q, erwartet englische Übersetzung", got)
 	}
-	if got := pickSubtitleFile(files, subLangPatterns("de"), ""); got != "abc12345678.de.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns("de"), VideoLang: ""}); got != "abc12345678.de.srt" {
 		t.Fatalf("gewählt: %q, erwartet deutsche Übersetzung", got)
 	}
 }
@@ -99,11 +102,11 @@ func TestPickSubtitleFileTranslatedOnly(t *testing.T) {
 // Manuelle (menschliche) Untertitel haben kein "-orig", müssen aber gefunden werden.
 func TestPickSubtitleFileManualSubs(t *testing.T) {
 	files := []string{"abc12345678.en.srt", "abc12345678.en-fixed.srt"}
-	if got := pickSubtitleFile(files, subLangPatterns("en"), ""); got != "abc12345678.en-fixed.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns("en"), VideoLang: ""}); got != "abc12345678.en-fixed.srt" {
 		t.Fatalf("gewählt: %q, erwartet bereinigte Datei", got)
 	}
 	// Nur die rohe Variante vorhanden → diese nehmen.
-	if got := pickSubtitleFile([]string{"abc12345678.en.srt"}, subLangPatterns("en"), ""); got != "abc12345678.en.srt" {
+	if got := pickSubtitle(subSelect{Files: []string{"abc12345678.en.srt"}, Patterns: subLangPatterns("en"), VideoLang: ""}); got != "abc12345678.en.srt" {
 		t.Fatalf("gewählt: %q, erwartet rohe Datei", got)
 	}
 }
@@ -112,10 +115,10 @@ func TestPickSubtitleFileManualSubs(t *testing.T) {
 // zu liefern – so entsteht kein arabisches Transkript mehr.
 func TestPickSubtitleFileNoMatchIsEmpty(t *testing.T) {
 	files := []string{"abc12345678.ar-orig.srt", "abc12345678.ar-orig-fixed.srt"}
-	if got := pickSubtitleFile(nil, subLangPatterns("en"), ""); got != "" {
+	if got := pickSubtitle(subSelect{Files: nil, Patterns: subLangPatterns("en"), VideoLang: ""}); got != "" {
 		t.Fatalf("leere Liste: %q, erwartet \"\"", got)
 	}
-	if got := pickSubtitleFile(files, subLangPatterns("en"), ""); got != "" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns("en"), VideoLang: ""}); got != "" {
 		t.Fatalf("nur Fremdsprache: %q, erwartet \"\" (kein arabisches Transkript)", got)
 	}
 }
@@ -127,11 +130,11 @@ func TestPickSubtitleFileNoMatchIsEmpty(t *testing.T) {
 // alphabetisch – mit Videosprache muss die deutsche Spur gewinnen.
 func TestPickSubtitleFileGermanVideoBeatsTranslation(t *testing.T) {
 	files := []string{"abc12345678.de.srt", "abc12345678.en-de.srt", "abc12345678.en.srt"}
-	if got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), "de"); got != "abc12345678.de.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "de"}); got != "abc12345678.de.srt" {
 		t.Fatalf("gewählt: %q, erwartet deutsche Spur", got)
 	}
 	// Gegenprobe: ohne Videosprache greift die Musterreihenfolge (en zuerst).
-	if got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), ""); got != "abc12345678.en-de.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: ""}); got != "abc12345678.en-de.srt" {
 		t.Fatalf("ohne Videosprache: %q", got)
 	}
 }
@@ -140,7 +143,7 @@ func TestPickSubtitleFileGermanVideoBeatsTranslation(t *testing.T) {
 // fremder Fassungen, "en" ist die Originalspur.
 func TestPickSubtitleFileEnglishVideoVariants(t *testing.T) {
 	files := []string{"dQw4w9WgXcQ.en.srt", "dQw4w9WgXcQ.en-de-DE.srt", "dQw4w9WgXcQ.en-en.srt"}
-	if got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), "en"); got != "dQw4w9WgXcQ.en.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "en"}); got != "dQw4w9WgXcQ.en.srt" {
 		t.Fatalf("gewählt: %q, erwartet englische Originalspur", got)
 	}
 }
@@ -148,12 +151,12 @@ func TestPickSubtitleFileEnglishVideoVariants(t *testing.T) {
 // Regionalvariante gilt als Originalspur ("de-DE" bei Videosprache de).
 func TestPickSubtitleFileRegionVariant(t *testing.T) {
 	files := []string{"abc12345678.de-DE.srt", "abc12345678.en-de.srt"}
-	if got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), "de"); got != "abc12345678.de-DE.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "de"}); got != "abc12345678.de-DE.srt" {
 		t.Fatalf("gewählt: %q, erwartet de-DE", got)
 	}
 	// VTT wird nur genutzt, wenn keine SRT-Fassung vorliegt.
 	files = []string{"abc12345678.de-DE.vtt", "abc12345678.de-DE-fixed.srt"}
-	if got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), "de"); got != "abc12345678.de-DE-fixed.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "de"}); got != "abc12345678.de-DE-fixed.srt" {
 		t.Fatalf("gewählt: %q, erwartet SRT vor VTT", got)
 	}
 }
@@ -167,9 +170,16 @@ func TestIsOriginalTag(t *testing.T) {
 		{"en-orig", "en", true},
 		{"en-US", "en", true},
 		{"de-DE", "de", true},
+		{"en-US-orig", "en", true},   // Originalspur mit Regionalcode
+		{"de-DE-orig", "de", true},   // dito
+		{"pt-BR-orig", "pt", true},   // dito
+		{"en-Latn-orig", "en", true}, // Schriftsatz
+		{"zh-Hans-orig", "zh", true}, // Schriftsatz (chinesisch vereinfacht)
+		{"zh-Hant", "zh", true},      // Schriftsatz ohne -orig
 		{"en-de-DE", "en", false},
 		{"en-en", "en", false},
 		{"en-ja", "en", false},
+		{"en-de-DE-orig", "en", false}, // Übersetzung bleibt Übersetzung
 		{"de", "en", false},
 		{"", "en", false},
 	}
@@ -221,18 +231,110 @@ func TestConvertSubtitleToSimpleSRT(t *testing.T) {
 	}
 }
 
-// Menschliche Untertitel (exakter Sprachcode) haben Vorrang vor der
-// automatischen Originalspur – die tagesschau liefert z. B. sauberere "de"-
-// Untertitel parallel zu "de-orig".
+// Menschliche Untertitel (über yt-dlp als "subtitles" gemeldet) haben Vorrang
+// vor der automatischen Originalspur – die tagesschau liefert z. B. sauberere
+// "de"-Untertitel parallel zu "de-orig".
 func TestPickSubtitleFilePrefersManualOverAuto(t *testing.T) {
 	files := []string{"00ns5-Gryw4.de-de.srt", "00ns5-Gryw4.de-orig.srt", "00ns5-Gryw4.de.srt"}
-	if got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), "de"); got != "00ns5-Gryw4.de.srt" {
+	got := pickSubtitle(subSelect{
+		Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "de",
+		ManualLangs: []string{"de"},
+	})
+	if got != "00ns5-Gryw4.de.srt" {
 		t.Fatalf("gewählt: %q, erwartet menschliche de-Untertitel", got)
 	}
 	// Ohne menschliche Spur gewinnt die Originalspur.
 	files = []string{"00ns5-Gryw4.de-de.srt", "00ns5-Gryw4.de-orig.srt"}
-	if got := pickSubtitleFile(files, subLangPatterns(DefaultSubLangs), "de"); got != "00ns5-Gryw4.de-orig.srt" {
+	if got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "de"}); got != "00ns5-Gryw4.de-orig.srt" {
 		t.Fatalf("gewählt: %q, erwartet de-orig", got)
+	}
+}
+
+// ─── Automatische Synchronisierung ("dubbed-auto") ───────────────────────────
+
+// Regressionstest zum gemeldeten Fehler: bei Videos mit YouTubes automatischer
+// Synchronisierung heißen die brauchbaren Spuren "en-orig"/"de-orig". Der reine
+// Code ("en") ist dort die Übersetzung aus einer Synchronfassung und wird von
+// YouTube zudem mit HTTP 429 abgewiesen. Die Originalspur muss gewinnen.
+func TestPickSubtitlePrefersOriginalAudioOverDubbedTranslation(t *testing.T) {
+	files := []string{"a4vfv4EMgYs.de-orig.srt", "a4vfv4EMgYs.en-orig.srt", "a4vfv4EMgYs.en.srt"}
+	got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "en-US"})
+	if got != "a4vfv4EMgYs.en-orig.srt" {
+		t.Fatalf("gewählt: %q, erwartet en-orig (Originalspur)", got)
+	}
+	// Auch ohne Regionszusatz in der Videosprache ("en" statt "en-US").
+	got = pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "en"})
+	if got != "a4vfv4EMgYs.en-orig.srt" {
+		t.Fatalf("gewählt: %q, erwartet en-orig", got)
+	}
+	// Teilweise fehlgeschlagene Sprachen: nur -orig-Dateien vorhanden.
+	got = pickSubtitle(subSelect{
+		Files:    []string{"a4vfv4EMgYs.de-orig.srt", "a4vfv4EMgYs.en-orig.srt"},
+		Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "en-US",
+	})
+	if got != "a4vfv4EMgYs.en-orig.srt" {
+		t.Fatalf("gewählt: %q, erwartet en-orig", got)
+	}
+}
+
+// Deutsches Video mit englischer Synchronfassung: nur "en-orig" (ASR der
+// Synchronfassung) und die deutsche Auto-Spur liegen vor. Die Videosprache
+// entscheidet – die deutsche Spur bleibt erste Wahl.
+func TestPickSubtitleGermanVideoWithEnglishDub(t *testing.T) {
+	files := []string{"xfHMB44dvig.de.srt", "xfHMB44dvig.en-orig.srt"}
+	got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "de-DE"})
+	if got != "xfHMB44dvig.de.srt" {
+		t.Fatalf("gewählt: %q, erwartet deutsche Spur", got)
+	}
+	// Fällt die deutsche Spur aus (429), bleibt die englische Originalspur.
+	got = pickSubtitle(subSelect{
+		Files:    []string{"xfHMB44dvig.en-orig.srt"},
+		Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "de-DE",
+	})
+	if got != "xfHMB44dvig.en-orig.srt" {
+		t.Fatalf("gewählt: %q, erwartet en-orig", got)
+	}
+}
+
+// Regionalcode in der Originalspur ("en-US-orig", "pt-BR-orig"): muss als
+// Originalspur erkannt und gegen die reine Übersetzung bevorzugt werden.
+func TestPickSubtitleRegionOriginalTag(t *testing.T) {
+	files := []string{"abc12345678.en.srt", "abc12345678.en-US-orig.srt"}
+	got := pickSubtitle(subSelect{Files: files, Patterns: subLangPatterns(DefaultSubLangs), VideoLang: "en-US"})
+	if got != "abc12345678.en-US-orig.srt" {
+		t.Fatalf("gewählt: %q, erwartet en-US-orig", got)
+	}
+}
+
+// parseManualSubLangs liest die --print-Ausgabe von %(subtitles)j.
+func TestParseManualSubLangs(t *testing.T) {
+	jsonLine := `{"de": [{"ext": "json3", "url": "https://example.invalid/x", "name": "German"}]}`
+	got := parseManualSubLangs("de-DE\n" + jsonLine + "\n")
+	if len(got) != 1 || got[0] != "de" {
+		t.Fatalf("parseManualSubLangs = %#v, erwartet [de]", got)
+	}
+	if got := parseManualSubLangs("en\nNA\n"); got != nil {
+		t.Fatalf("ohne menschliche Untertitel: %#v, erwartet nil", got)
+	}
+	if got := parseManualSubLangs(""); got != nil {
+		t.Fatalf("leere Ausgabe: %#v, erwartet nil", got)
+	}
+	// Mehrere Sprachen, sortiert; die JSON-Zeile darf die Videosprache nicht stören.
+	got = parseManualSubLangs(`{"pt-BR": [], "en": [], "de": []}`)
+	if len(got) != 3 || got[0] != "de" || got[1] != "en" || got[2] != "pt-BR" {
+		t.Fatalf("parseManualSubLangs = %#v", got)
+	}
+}
+
+// stripSubsInfo hält die Untertitel-URLs aus dem Logtext heraus.
+func TestStripSubsInfo(t *testing.T) {
+	out := "en-US\n" + `{"en": [{"url": "https://www.youtube.com/api/timedtext?v=x&signature=geheim"}]}` + "\nWARNING: etwas"
+	got := stripSubsInfo(out)
+	if strings.Contains(got, "signature=geheim") {
+		t.Fatalf("JSON-Zeile nicht entfernt: %q", got)
+	}
+	if !strings.Contains(got, "en-US") || !strings.Contains(got, "WARNING: etwas") {
+		t.Fatalf("relevante Zeilen fehlen: %q", got)
 	}
 }
 
@@ -241,11 +343,12 @@ func TestSubTagRank(t *testing.T) {
 		tag, lang string
 		want      int
 	}{
-		{"de", "de", 0},
-		{"de-orig", "de", 1},
-		{"de-DE", "de", 2},
-		{"de-de", "de", 3},
-		{"en", "de", 3},
+		{"de-orig", "de", 0}, // Originalspur (ASR der gesprochenen Tonspur)
+		{"de-DE-orig", "de", 0},
+		{"de", "de", 1}, // exakter Code: menschlich oder Auto der Originalspur
+		{"de-DE", "de", 1},
+		{"de-de", "de", 2}, // Übersetzung
+		{"en", "de", 2},
 	}
 	for _, c := range cases {
 		if got := subTagRank(c.tag, c.lang); got != c.want {
@@ -256,15 +359,18 @@ func TestSubTagRank(t *testing.T) {
 
 // Die Anforderungsliste muss minimal bleiben: "en.*" zog über Auto-Dub-Varianten
 // (en-de-DE, en-ja, …) rund zehn Requests nach sich und lief ins HTTP-429-Limit.
+// Die "-orig"-Spuren stehen vorn, weil yt-dlp den Download beim ersten
+// Sprachfehler abbricht und die reinen Codes synchronisierter Videos (en, de)
+// mit HTTP 429 antworten.
 func TestNarrowSubLangs(t *testing.T) {
 	cases := []struct {
 		in   string
 		want string
 	}{
-		{"en.*,de.*", "en,en-orig,de,de-orig"},
-		{"en", "en,en-orig"},
-		{"en,de", "en,en-orig,de,de-orig"},
-		{"de-DE", "de-DE,de-DE-orig"},
+		{"en.*,de.*", "en.*-orig,de.*-orig,en,de"},
+		{"en", "en.*-orig,en"},
+		{"en,de", "en.*-orig,de.*-orig,en,de"},
+		{"de-DE", "de-DE.*-orig,de-DE"},
 		{".*-orig", ".*-orig"},
 	}
 	for _, c := range cases {

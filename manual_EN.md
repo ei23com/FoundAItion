@@ -168,8 +168,16 @@ Every entry is positioned on an interactive 2D map by its embedding vector – s
 videos use the English track, German videos the German one – detected from the language spoken in the video.
 Within a language, **human** subtitles win over automatic ones (`srt_fix` cleans up automatic rolling
 captions). If no matching track exists, no transcript is produced on purpose (never foreign-language
-material). Requests stay minimal (`en,en-orig,de,de-orig`); only when that yields nothing is a broader search
-issued – this keeps YouTube's rate limit (HTTP 429) happy.
+material).
+
+**Automatic dubbing ("dubbed-auto"):** when YouTube dubs a video automatically, the tracks of the original
+audio are named `<language>-orig` (`yt-sub --list` shows e.g. `en-orig`, `de-orig`). Only those tracks contain
+the spoken original text; the plain codes (`en`, `de`) are translations of a dubbed version there and often
+answer with **HTTP 429** as well. The pipeline therefore requests the `-orig` tracks first
+(`en.*-orig,de.*-orig`, including regional forms such as `en-US-orig`), keeps going with `--ignore-errors`
+when a single language fails, and prefers human subtitles → `-orig` → plain codes within a language. Without
+that order yt-dlp aborted on the first 429 and the video ended up without a transcript. Only when the narrow
+list yields nothing is a broader search issued – this keeps YouTube's rate limit happy.
 
 **Manual helper** for when the pipeline finds no subtitles:
 
@@ -187,6 +195,10 @@ found) and calls `./foundaition yt-sub …`. It writes into the target directory
 |------|---------|
 | `<videoID>.<lang>.srt` | downloaded subtitles (or `.vtt` when only VTT exists) |
 | `<videoID>.<lang>.txt` | same content in the program format `HH:MM:SS Text` (like the `content` column) |
+
+`<lang>` is `en`/`de` (human subtitles or a translation) or `en-orig`/`de-orig` (subtitles of the original
+audio track, see above). The choice is reported together with its origin, e.g.
+`✓ Sprache: en-orig – Originalspur (Videosprache: en-US, 48230 → 27796 Zeichen)`.
 
 If the URL exists in the database, the transcript is written straight into `content` – summaries and the topic
 map can then use it. Options: `--out DIR`, `--manual` (human subtitles only), `--auto` (automatic only),
@@ -282,7 +294,7 @@ If a feed does not fit into the token limit (`SUMMARY_MAX_TOKENS`), it is cut at
 | `WHISPER_MODEL` | `large-v3` | Whisper model |
 | `CRAWL_TIMEOUT` | `60` | Timeout per crawl request (seconds) |
 | `YTDLP_PATH` | auto-detect | Path to yt-dlp binary |
-| `YTDLP_SUB_LANGS` | `en.*,de.*` | Preferred subtitle languages (yt-dlp patterns, priority order). English videos use the English track, German videos the German one. Never set `.*-orig` – it downloads every original track (often Arabic on English videos). |
+| `YTDLP_SUB_LANGS` | `en.*,de.*` | Preferred subtitle languages (yt-dlp patterns, priority order). English videos use the English track, German videos the German one. Within a language, human subtitles win, then the original track (`-orig`), then plain codes. Never set `.*-orig` – it downloads every original track (often Arabic on English videos). |
 | `YT_SUBS_DIR` | `./subs` | Output directory of the manual helper `yt-sub` |
 | `MAX_PROCESS_DAYS` | `14` | Max days backwards for batch processing |
 | `RSS_BASE_URL` | *(empty)* | Base URL for feed links (e.g. behind reverse proxy). Empty = auto-detected from request host. |

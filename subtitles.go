@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // ─── Untertitel-Sprachauswahl ────────────────────────────────────────────────
@@ -48,30 +50,45 @@ func subLangPatterns(list string) []string {
 	return out
 }
 
-// narrowSubLangs leitet aus den Mustern eine minimale Anforderungsliste ab:
-// "en.*" → "en,en-orig". So werden nur die Originalspuren angefragt statt
-// aller Auto-Dub-Varianten (en-de-DE, en-ja, …). Das schont YouTubes
-// Ratelimit – zu viele Anfragen führen sonst zu HTTP 429 und der Lauf
-// liefert gar keine Untertitel.
+// narrowSubLangs leitet aus den Mustern eine minimale Anforderungsliste ab und
+// stellt die "-orig"-Spuren voran: "en.*,de.*" → "en.*-orig,de.*-orig,en,de".
+//
+// Zwei Gründe für diese Reihenfolge:
+//
+//  1. Seit YouTubes automatischer Synchronisierung ("dubbed-auto") sind die
+//     reinen Sprachcodes häufig Übersetzungen aus der Synchronfassung, während
+//     "<sprache>-orig" die Untertitel der Original-Tonspur enthält. Nur diese
+//     "-orig"-Spuren liefern zuverlässig Text.
+//  2. yt-dlp bricht den gesamten Untertitel-Download ab, sobald eine Sprache
+//     scheitert ("Unable to download video subtitles for 'en': HTTP Error
+//     429"). Die reinen Codes antworten bei synchronisierten Videos oft mit
+//     HTTP 429 – standen sie am Anfang der Liste, wurde keine einzige Datei
+//     geladen. Mit --ignore-errors (siehe runSubsDownload) läuft der Download
+//     ohnehin weiter; die Reihenfolge spart trotzdem Anfragen, weil zuerst die
+//     funktionierenden Spuren geholt werden.
+//
+// Das Muster "<base>.*-orig" deckt auch Regionalformen wie "en-US-orig" ab.
+// Die Liste bleibt minimal (keine Auto-Dub-Varianten wie "en-de-DE"), weil zu
+// viele Anfragen ins HTTP-429-Limit laufen.
 func narrowSubLangs(patterns []string) string {
-	var out []string
+	var orig, plain []string
 	seen := map[string]bool{}
-	add := func(p string) {
+	add := func(dst *[]string, p string) {
 		if p != "" && !seen[p] {
 			seen[p] = true
-			out = append(out, p)
+			*dst = append(*dst, p)
 		}
 	}
 	for _, p := range patterns {
 		base := strings.TrimSuffix(p, ".*")
 		if base == p || base == "" {
-			add(p) // kein Präfixmuster (z. B. "de-DE" oder ".*-orig")
+			add(&plain, p) // kein Präfixmuster (z. B. "de-DE" oder ".*-orig")
 			continue
 		}
-		add(base)           // exakter Code (meist menschliche Untertitel)
-		add(base + "-orig") // gesprochene Originalspur
+		add(&orig, base+".*-orig") // Untertitel der Original-Tonspur
+		add(&plain, base)          // menschliche Untertitel bzw. Übersetzung
 	}
-	return strings.Join(out, ",")
+	return strings.Join(append(orig, plain...), ",")
 }
 
 // normalizeSubLang erweitert einen reinen Sprachcode zum Präfixmuster.
@@ -104,26 +121,40 @@ func srtLangTag(name string) string {
 	return base[i+1:]
 }
 
-// pickSubtitleFile wählt aus mehreren heruntergeladenen Untertiteldateien die
+// subSelect beschreibt, welche heruntergeladenen Untertiteldateien zur Auswahl
+// stehen und was über das Video bekannt ist.
+type subSelect struct {
+	Files       []string // Dateinamen im Untertitelverzeichnis
+	Patterns    []string // gewünschte Sprachmuster in Prioritätsreihenfolge
+	VideoLang   string   // gesprochene Sprache des Videos ("" = unbekannt)
+	ManualLangs []string // Sprachen mit menschlichen Untertiteln (leer = unbekannt)
+}
+
+// pickSubtitle wählt aus mehreren heruntergeladenen Untertiteldateien die
 // beste aus. Priorität:
-//  1. Originalspur der im Video gesprochenen Sprache (videoLang): exakter Code,
-//     "<lang>-orig" oder Regionalvariante wie "de-DE" – nicht aber Übersetzungen
-//     wie "en-de-DE" (englischer Text aus deutscher Quelle).
+//  1. Originalspur der im Video gesprochenen Sprache (videoLang): "en", "en-orig",
+//     "en-US" oder "en-US-orig" – nicht aber Übersetzungen wie "en-de-DE"
+//     (englischer Text aus deutscher Quelle).
 //  2. "-orig"-Spur passend zur Musterreihenfolge.
 //  3. irgendeine Spur in Musterreihenfolge (z. B. liegt nur eine Übersetzung vor)
 //
+// Innerhalb einer Sprache gewinnen menschliche Untertitel (ManualLangs) vor der
+// automatischen Originalspur ("-orig") vor einer gewöhnlichen Auto-Spur: bei
+// automatisch synchronisierten Videos ist der reine Sprachcode oft nur die
+// Übersetzung der Synchronfassung, während "<sprache>-orig" die Originalspur
+// enthält. Danach entscheiden die bereinigte SRT-Datei und SRT vor VTT.
+//
 // Passt keine Datei, wird "" geliefert: lieber kein Transkript als ein
-// fremdsprachiges. Innerhalb einer Sprache gewinnt die bereinigte SRT-Datei,
-// danach SRT vor VTT.
-func pickSubtitleFile(names []string, patterns []string, videoLang string) string {
-	if len(names) == 0 {
+// fremdsprachiges.
+func pickSubtitle(s subSelect) string {
+	if len(s.Files) == 0 {
 		return ""
 	}
-	sorted := append([]string(nil), names...)
+	sorted := append([]string(nil), s.Files...)
 	sort.Strings(sorted) // deterministisch, unabhängig von der Verzeichnisreihenfolge
 
 	// Stufe 1: Originalspur der Videosprache (nur wenn die Sprache bekannt ist).
-	if lang := baseLang(videoLang); lang != "" && !strings.EqualFold(lang, "NA") {
+	if lang := baseLang(s.VideoLang); lang != "" && !strings.EqualFold(lang, "NA") {
 		var hits []string
 		for _, n := range sorted {
 			if isOriginalTag(srtLangTag(n), lang) {
@@ -131,13 +162,13 @@ func pickSubtitleFile(names []string, patterns []string, videoLang string) strin
 			}
 		}
 		if len(hits) > 0 {
-			return bestSubtitle(hits, lang)
+			return bestSubtitle(hits, s.scorer(lang))
 		}
 	}
 
 	// Stufe 2 + 3: Musterreihenfolge, erst mit "-orig", dann ohne Einschränkung.
 	for _, wantOrig := range []bool{true, false} {
-		for _, p := range patterns {
+		for _, p := range s.Patterns {
 			re := langPatternRe(p)
 			var hits []string
 			for _, n := range sorted {
@@ -145,17 +176,73 @@ func pickSubtitleFile(names []string, patterns []string, videoLang string) strin
 				if tag == "" || !re.MatchString(tag) {
 					continue
 				}
-				if wantOrig && !strings.HasSuffix(strings.ToLower(tag), "-orig") {
+				if wantOrig && !isOrigTag(tag) {
 					continue
 				}
 				hits = append(hits, n)
 			}
 			if len(hits) > 0 {
-				return bestSubtitle(hits, "")
+				return bestSubtitle(hits, s.scorer(""))
 			}
 		}
 	}
 	return ""
+}
+
+// scorer liefert die Bewertungsfunktion für Dateien einer Sprache. lang ist die
+// Videosprache ("" = unbekannt, dann zählt nur "-orig" als Originalspur).
+func (s subSelect) scorer(lang string) func(string) [4]int {
+	return func(name string) [4]int {
+		tag := srtLangTag(name)
+		human := 1
+		if isManualLang(s.ManualLangs, tag) {
+			human = 0 // menschliche Untertitel
+		}
+		rank := subTagRank(tag, lang)
+		if lang == "" && isOrigTag(tag) {
+			rank = 0 // ohne Videosprache zählt die Originalspur
+		}
+		lower := strings.ToLower(name)
+		fixed := 1
+		if strings.HasSuffix(lower, "-fixed.srt") {
+			fixed = 0
+		}
+		ext := 1
+		if strings.HasSuffix(lower, ".srt") {
+			ext = 0
+		}
+		return [4]int{human, rank, fixed, ext}
+	}
+}
+
+// isManualLang meldet, ob eine Sprache unter den menschlichen Untertiteln ist.
+func isManualLang(langs []string, tag string) bool {
+	for _, l := range langs {
+		if strings.EqualFold(strings.TrimSpace(l), strings.TrimSpace(tag)) {
+			return true
+		}
+	}
+	return false
+}
+
+// trackOrigin beschreibt die Herkunft einer gewählten Untertitelspur für Log
+// und Ausgabe.
+func trackOrigin(manualLangs []string, tag string) string {
+	switch {
+	case isManualLang(manualLangs, tag):
+		return "menschliche Untertitel"
+	case isOrigTag(tag):
+		return "Originalspur"
+	default:
+		return "Übersetzung"
+	}
+}
+
+// isOrigTag erkennt Sprachkürzel mit Originalspur-Kennung: "en-orig",
+// "en-US-orig", "pt-BR-orig".
+func isOrigTag(tag string) bool {
+	parts := strings.Split(strings.TrimSpace(tag), "-")
+	return len(parts) > 1 && strings.EqualFold(parts[len(parts)-1], "orig")
 }
 
 // baseLang liefert den Sprachteil ohne Regionalzusatz ("de-DE" → "de").
@@ -168,8 +255,8 @@ func baseLang(tag string) string {
 }
 
 // isOriginalTag prüft, ob ein Sprachkürzel die Originalspur der Sprache lang
-// bezeichnet: "en", "en-orig", "en-US", "de-DE" – nicht aber Übersetzungen wie
-// "en-de-DE" oder "en-en" (hier ist die Quelle eine andere Fassung).
+// bezeichnet: "en", "en-orig", "en-US", "en-US-orig" – nicht aber Übersetzungen
+// wie "en-de-DE" oder "en-en" (hier ist die Quelle eine andere Fassung).
 func isOriginalTag(tag, lang string) bool {
 	tag = strings.TrimSpace(tag)
 	if tag == "" {
@@ -182,41 +269,63 @@ func isOriginalTag(tag, lang string) bool {
 	if len(parts) == 1 {
 		return true // exakter Sprachcode
 	}
-	rest := strings.Join(parts[1:], "-")
-	if strings.EqualFold(rest, "orig") {
-		return true // gesprochene Originalspur
+	rest := parts[1:]
+	if strings.EqualFold(rest[len(rest)-1], "orig") {
+		rest = rest[:len(rest)-1] // Originalspur-Kennung entfernen
 	}
-	// Regionalvariante: Zusatz ohne Kleinbuchstaben ("DE", "US", "419")
-	return rest == strings.ToUpper(rest)
+	if len(rest) == 0 {
+		return true // "en-orig"
+	}
+	// Regionalzusätze ("DE", "US", "419") oder Schriftsätze ("Latn", "Hans",
+	// wie in "zh-Hans") sind keine Übersetzungen – Kleinbuchstaben dagegen
+	// schon ("en-de-DE" = englischer Text aus deutscher Quelle).
+	for _, r := range rest {
+		if r == strings.ToUpper(r) || isScriptSubtag(r) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// isScriptSubtag erkennt einen Schriftsatz wie "Latn" oder "Hans":
+// vier Buchstaben, erster groß, Rest klein.
+func isScriptSubtag(tag string) bool {
+	runes := []rune(tag)
+	if len(runes) != 4 || !unicode.IsUpper(runes[0]) {
+		return false
+	}
+	for _, r := range runes[1:] {
+		if !unicode.IsLower(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // subTagRank bewertet ein Sprachkürzel innerhalb derselben Sprache:
-// 0 = exakter Code (meist menschliche Untertitel), 1 = "-orig" (automatisch
-// erzeugte Originalspur), 2 = Regionalvariante, 3 = Übersetzung/Sonstiges.
+// 0 = Originalspur ("-orig", ASR der gesprochenen Tonspur), 1 = exakter Code
+// oder Regionalvariante, 2 = Übersetzung/Sonstiges (z. B. "en-de-DE").
 func subTagRank(tag, lang string) int {
 	if tag == "" || !isOriginalTag(tag, lang) {
-		return 3
+		return 2
 	}
-	parts := strings.Split(tag, "-")
-	if len(parts) == 1 {
+	if isOrigTag(tag) {
 		return 0
 	}
-	rest := strings.Join(parts[1:], "-")
-	if strings.EqualFold(rest, "orig") {
-		return 1
-	}
-	return 2
+	return 1
 }
 
-// bestSubtitle wählt aus mehreren Dateien derselben Sprache die beste:
-// zuerst nach Sprachrang, dann bereinigte SRT-Datei, dann SRT vor VTT.
-func bestSubtitle(names []string, lang string) string {
+// bestSubtitle wählt aus mehreren Dateien derselben Sprache die beste: zuerst
+// nach Bewertung (menschlich, Originalspur, bereinigt, SRT vor VTT), dann
+// alphabetisch.
+func bestSubtitle(names []string, score func(string) [4]int) string {
 	if len(names) == 0 {
 		return ""
 	}
 	sorted := append([]string(nil), names...)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		si, sj := subtitleScore(sorted[i], lang), subtitleScore(sorted[j], lang)
+		si, sj := score(sorted[i]), score(sorted[j])
 		for k := range si {
 			if si[k] != sj[k] {
 				return si[k] < sj[k]
@@ -225,20 +334,6 @@ func bestSubtitle(names []string, lang string) string {
 		return sorted[i] < sorted[j]
 	})
 	return sorted[0]
-}
-
-// subtitleScore liefert die Sortierkriterien: Rang, bereinigt, SRT vor VTT.
-func subtitleScore(name, lang string) [3]int {
-	lower := strings.ToLower(name)
-	fixed := 1
-	if strings.HasSuffix(lower, "-fixed.srt") {
-		fixed = 0
-	}
-	ext := 1
-	if strings.HasSuffix(lower, ".srt") {
-		ext = 0
-	}
-	return [3]int{subTagRank(srtLangTag(name), lang), fixed, ext}
 }
 
 // ─── Download ────────────────────────────────────────────────────────────────
@@ -278,9 +373,10 @@ func listSubtitleFiles(dir string) []string {
 
 // subsResult bündelt das Ergebnis eines Untertitel-Downloads.
 type subsResult struct {
-	Files     []string // neu erzeugte .srt/.vtt-Dateinamen
-	VideoLang string   // im Video gesprochene Sprache ("" wenn unbekannt)
-	Output    string   // yt-dlp-Ausgabe (Warnungen/Fehler) für Log und Anzeige
+	Files       []string // neu erzeugte .srt/.vtt-Dateinamen
+	VideoLang   string   // im Video gesprochene Sprache ("" wenn unbekannt)
+	ManualLangs []string // Sprachen mit menschlichen Untertiteln ("" wenn keine)
+	Output      string   // yt-dlp-Ausgabe (Warnungen/Fehler) für Log und Anzeige
 }
 
 // downloadSubtitles lädt Untertitel per yt-dlp herunter und gibt die dabei NEU
@@ -288,8 +384,9 @@ type subsResult struct {
 //
 // Verwendet dieselben Schritte wie die Transkript-Pipeline:
 // --skip-download, --sub-format srt/vtt, --convert-subs srt, srt_fix-Plugin.
-// Zusätzlich wird mit --print die Videosprache ermittelt (gleicher Aufruf, kein
-// zweiter yt-dlp-Lauf) – sie entscheidet später, welche Spur gewinnt.
+// Zusätzlich werden mit --print die Videosprache und die Sprachen mit
+// menschlichen Untertiteln ermittelt (gleicher Aufruf, kein zweiter
+// yt-dlp-Lauf) – sie entscheiden später, welche Spur gewinnt.
 //
 // Der Aufruf muss im Binärverzeichnis laufen, weil dort yt-dlp und das
 // Plugin liegen.
@@ -312,14 +409,16 @@ func (a *App) downloadSubtitles(req subsRequest) (subsResult, error) {
 	full := strings.Join(patterns, ",")
 	narrow := narrowSubLangs(patterns)
 
-	// Stufe 1: nur die Originalspuren anfragen (wenige Requests).
+	// Stufe 1: schmale Liste – die Originalspuren zuerst (wenige Requests).
 	res, err := a.runSubsDownload(req, narrow)
 	if len(res.Files) > 0 || narrow == full {
 		return res, err
 	}
 
 	// Bei Rate-Limit (HTTP 429) ist ein zweiter, breiterer Versuch kontraproduktiv:
-	// er verschärft das Limit und würde ohnehin scheitern.
+	// er verschärft das Limit und würde ohnehin scheitern. Die schmale Liste
+	// enthält die Originalspuren (auch mit Regionalcode), deshalb scheitert der
+	// Lauf nicht mehr an den 429-Antworten der reinen Codes.
 	if strings.Contains(res.Output, "429") {
 		log.Printf("[yt-dlp subs] Rate-Limit (429) – kein zweiter Versuch")
 		return res, err
@@ -357,6 +456,11 @@ func (a *App) runSubsDownload(req subsRequest, langs string) (subsResult, error)
 	args := []string{
 		"--skip-download",
 		"--no-playlist",
+		// Einzelne Sprachen scheitern regelmäßig mit HTTP 429 (vor allem die
+		// reinen Codes synchronisierter Videos). Ohne --ignore-errors bricht
+		// yt-dlp den kompletten Untertitel-Download beim ersten Fehler ab und
+		// die funktionierenden "-orig"-Spuren werden nie geladen.
+		"--ignore-errors",
 	}
 	if req.Manual {
 		args = append(args, "--write-subs")
@@ -373,7 +477,9 @@ func (a *App) runSubsDownload(req subsRequest, langs string) (subsResult, error)
 		"--convert-subs", "srt", // Spuren ohne SRT-Variante konvertieren (braucht ffmpeg)
 		"--use-postprocessor", "srt_fix:when=before_dl",
 		"-o", filepath.Join(req.OutDir, "%(id)s"),
-		"--no-simulate", "--print", "%(language)s",
+		"--no-simulate",
+		"--print", "%(language)s", // gesprochene Sprache (steuert die Auswahl)
+		"--print", "%(subtitles)j", // menschliche Untertitel (haben Vorrang)
 		"--quiet",
 		req.URL,
 	)
@@ -402,7 +508,10 @@ func (a *App) runSubsDownload(req subsRequest, langs string) (subsResult, error)
 	}
 
 	res.VideoLang = parseVideoLang(stdout.String())
-	res.Output = strings.TrimSpace(strings.Join([]string{stdout.String(), stderr.String()}, "\n"))
+	res.ManualLangs = parseManualSubLangs(stdout.String())
+	res.Output = strings.TrimSpace(strings.Join([]string{
+		stripSubsInfo(stdout.String()), stderr.String(),
+	}, "\n"))
 
 	for _, n := range listSubtitleFiles(req.OutDir) {
 		if !before[n] {
@@ -439,6 +548,41 @@ func parseVideoLang(out string) string {
 		}
 	}
 	return ""
+}
+
+// parseManualSubLangs liest die mit --print "%(subtitles)j" ausgegebenen
+// Sprachen menschlicher Untertitel. yt-dlp schreibt "NA", wenn es keine gibt.
+func parseManualSubLangs(out string) []string {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var subs map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(line), &subs); err != nil {
+			continue
+		}
+		langs := make([]string, 0, len(subs))
+		for lang := range subs {
+			langs = append(langs, lang)
+		}
+		sort.Strings(langs)
+		return langs
+	}
+	return nil
+}
+
+// stripSubsInfo entfernt die JSON-Zeile der --print-Ausgabe aus dem Logtext
+// (sie enthält die vollständigen Untertitel-URLs und würde das Log fluten).
+func stripSubsInfo(out string) string {
+	var keep []string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "{") {
+			continue
+		}
+		keep = append(keep, line)
+	}
+	return strings.TrimSpace(strings.Join(keep, "\n"))
 }
 
 // ─── Untertitel → Klartext ───────────────────────────────────────────────────
