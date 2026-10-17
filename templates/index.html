@@ -204,6 +204,8 @@
 
         .brand-accent { color: var(--green); }
 
+        .brand-prefix { color: var(--dim); font-weight: 400; }
+
         .brand-sub {
             padding-left: 0.5rem;
             border-left: 1px solid var(--line);
@@ -2099,7 +2101,8 @@
 
         @media (max-width: 560px) {
             .topbar { gap: 0.5rem; padding: 0.45rem 0.55rem; }
-            .brand-name { font-size: 0.88rem; letter-spacing: 0.12em; }
+            .brand-name { font-size: 0.74rem; letter-spacing: 0.06em; }
+            .brand-sub { display: none; }
             .leds { gap: 0.25rem; }
             .led { font-size: 0.58rem; padding: 0.08rem 0.3rem; }
             .led-cats, .led-page { display: none; }
@@ -2146,7 +2149,7 @@
 
     <div class="brand">
         <span class="brand-mark">&#9646;</span>
-        <span class="brand-name">FOUND<span class="brand-accent">/</span>AIT<span class="brand-accent">/</span>ION</span>
+        <span class="brand-name"><span class="brand-prefix">ei23-</span>FOUND<span class="brand-accent">/</span>AI<span class="brand-accent">/</span>ION</span>
         <span class="brand-sub">INDEX // v2</span>
     </div>
 
