@@ -2308,8 +2308,8 @@ const translations = {
         add_cancel:   'Abbrechen',
         add_insert:   'Einf\u00fcgen',
         detail_back:  'Zur\u00fcck zur \u00dcbersicht',
-        detail_prev:  'Vorheriger',
-        detail_next:  'N\u00e4chster',
+        detail_prev:  'Zur\u00fcck',
+        detail_next:  'Weiter',
         detail_copy_url: 'URL kopieren',
         detail_copy_summary: 'Zusammenfassung kopieren',
         detail_copy_content: 'Originaltext kopieren',
@@ -2500,7 +2500,7 @@ const translations = {
         add_cancel:   'Cancel',
         add_insert:   'Insert',
         detail_back:  'Back to list',
-        detail_prev:  'Previous',
+        detail_prev:  'Back',
         detail_next:  'Next',
         detail_copy_url: 'Copy URL',
         detail_copy_summary: 'Copy summary',
@@ -4130,12 +4130,11 @@ function renderDetail(link) {
                 ${!hasContent ? '<div class="dim-italic detail-no-content">' + __('detail_no_content') + '</div>' : ''}
             </div>
 
-            ${allLinks.length > 1 ? `
             <div class="detail-pager">
                 <button class="detail-back" id="prevLinkBtn2" title="${__('detail_prev')}">‹ ${__('detail_prev')}</button>
                 <span class="spacer"></span>
                 <button class="detail-back" id="nextLinkBtn2" title="${__('detail_next')}">${__('detail_next')} ›</button>
-            </div>` : ''}
+            </div>
         </article>
     `;
 
@@ -4151,26 +4150,44 @@ function renderDetail(link) {
         renderList(allLinks);
     });
 
-    // Vorheriger / Nächster Artikel
+    // Zurück / Weiter – Ziele zuerst aus der geladenen Liste, fehlende
+    // Nachbarn (Seitenrand, fremde Seite) kommen vom Server nach.
     const linkIdx = allLinks.findIndex(l => l.id === link.id);
-    function navigateLink(dir) {
-        if (linkIdx === -1) return;
-        const target = allLinks[linkIdx + dir];
-        if (target) location.hash = '#link/' + target.id;
+    const navTargets = { '-1': null, '1': null };
+    if (linkIdx > 0) navTargets[-1] = allLinks[linkIdx - 1].id;
+    if (linkIdx >= 0 && linkIdx < allLinks.length - 1) navTargets[1] = allLinks[linkIdx + 1].id;
+
+    const navButtons = [
+        [document.getElementById('prevLinkBtn'), -1],
+        [document.getElementById('prevLinkBtn2'), -1],
+        [document.getElementById('nextLinkBtn'), 1],
+        [document.getElementById('nextLinkBtn2'), 1],
+    ].filter(pair => pair[0]);
+
+    function syncNavButtons() {
+        navButtons.forEach(([btn, dir]) => {
+            const target = navTargets[dir];
+            btn.disabled = !target;
+            btn.style.opacity = target ? '1' : '0.35';
+        });
     }
-    const hasPrev = linkIdx > 0 && !!allLinks[linkIdx - 1];
-    const hasNext = linkIdx >= 0 && linkIdx < allLinks.length - 1 && !!allLinks[linkIdx + 1];
-    [
-        [document.getElementById('prevLinkBtn'), hasPrev, -1],
-        [document.getElementById('prevLinkBtn2'), hasPrev, -1],
-        [document.getElementById('nextLinkBtn'), hasNext, 1],
-        [document.getElementById('nextLinkBtn2'), hasNext, 1],
-    ].forEach(([btn, atEdge, dir]) => {
-        if (!btn) return;
-        btn.disabled = atEdge;
-        btn.style.opacity = atEdge ? '0.2' : '1';
-        btn.addEventListener('click', () => navigateLink(dir));
+    navButtons.forEach(([btn, dir]) => {
+        btn.addEventListener('click', () => {
+            if (navTargets[dir]) location.hash = '#link/' + navTargets[dir];
+        });
     });
+    syncNavButtons();
+
+    if (!navTargets['-1'] || !navTargets['1']) {
+        api('/api/links/neighbors?id=' + link.id)
+            .then(nb => {
+                if (!nb) return;
+                if (!navTargets['-1'] && nb.prev) navTargets['-1'] = nb.prev;
+                if (!navTargets['1'] && nb.next) navTargets['1'] = nb.next;
+                syncNavButtons();
+            })
+            .catch(() => {});
+    }
 
     document.getElementById('btnCopyUrl').addEventListener('click', () => {
         copyToClipboard(link.url);

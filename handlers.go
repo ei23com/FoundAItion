@@ -28,6 +28,8 @@ func (a *App) handleAPI(w http.ResponseWriter, r *http.Request) {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
+	case "/api/links/neighbors":
+		a.neighborLinks(w, r)
 	case "/api/links/rescrape":
 		a.rescrapeLink(w, r)
 	case "/api/links/resummarize":
@@ -390,6 +392,45 @@ func (a *App) deleteLink(w http.ResponseWriter, r *http.Request) {
 	rows, _ := result.RowsAffected()
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true,"deleted":` + strconv.FormatBool(rows > 0) + `}`))
+}
+
+// ─── Nachbarn – GET /api/links/neighbors?id=X ────────────────────────────────
+// Liefert die IDs der direkt benachbarten Einträge in der Listenreihenfolge
+// (ORDER BY "id" DESC). Damit funktionieren Zurück/Weiter auch am Seitenrand
+// und für Artikel, die nicht in der aktuell geladenen Seite liegen.
+
+func (a *App) neighborLinks(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.URL.Query().Get("id"))
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+
+	var prev, next sql.NullInt64
+	prevSQL := fmt.Sprintf(`SELECT "id" FROM %s WHERE "id" > ? ORDER BY "id" ASC LIMIT 1`, TableName)
+	if err := a.db.QueryRowContext(r.Context(), prevSQL, id).Scan(&prev); err != nil && err != sql.ErrNoRows {
+		log.Printf("WARN: neighbor prev query failed: %v", err)
+	}
+	nextSQL := fmt.Sprintf(`SELECT "id" FROM %s WHERE "id" < ? ORDER BY "id" DESC LIMIT 1`, TableName)
+	if err := a.db.QueryRowContext(r.Context(), nextSQL, id).Scan(&next); err != nil && err != sql.ErrNoRows {
+		log.Printf("WARN: neighbor next query failed: %v", err)
+	}
+
+	out := struct {
+		Prev *int64 `json:"prev"`
+		Next *int64 `json:"next"`
+	}{}
+	if prev.Valid {
+		v := prev.Int64
+		out.Prev = &v
+	}
+	if next.Valid {
+		v := next.Int64
+		out.Next = &v
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }
 
 // ─── Categories – GET /api/categories ────────────────────────────────────────

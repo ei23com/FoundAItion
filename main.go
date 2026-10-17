@@ -145,6 +145,7 @@ func setupHTTPServer(app *App, listenPort int, cfg Config) *http.Server {
 
 	// API endpoints
 	mux.HandleFunc("/api/links", app.handleAPI)
+	mux.HandleFunc("/api/links/neighbors", app.handleAPI)
 	mux.HandleFunc("/api/links/rescrape", app.handleAPI)
 	mux.HandleFunc("/api/links/resummarize", app.handleAPI)
 	mux.HandleFunc("/api/prompts", app.handleAPI)
