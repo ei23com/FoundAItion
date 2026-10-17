@@ -228,6 +228,13 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 		log.Printf("WARN: count query failed: %v", err)
 	}
 
+	// Ungelesene gesamt – unabhaengig von den aktiven Filtern (HUD-Anzeige).
+	var unread int
+	unreadSQL := fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE "read" = 0 OR "read" IS NULL`, TableName)
+	if err := a.db.QueryRowContext(r.Context(), unreadSQL).Scan(&unread); err != nil {
+		log.Printf("WARN: unread count query failed: %v", err)
+	}
+
 	// Fetch data
 	dataSQL := fmt.Sprintf(`SELECT "id", "timestamp", "url", "title", "summary", "content", "category", "note", "included", "marked", "read"
 	FROM %s%s
@@ -263,7 +270,7 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(linkListResponse{Links: links, Total: total})
+	json.NewEncoder(w).Encode(linkListResponse{Links: links, Total: total, Unread: unread})
 }
 
 // ─── Update Link – PATCH /api/links?id=X&note=...&included=...&marked=...&read=...

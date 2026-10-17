@@ -149,8 +149,9 @@ type ProcessResponse struct {
 
 // linkListResponse is the response for GET /api/links.
 type linkListResponse struct {
-	Links []Link `json:"links"`
-	Total int    `json:"total"`
+	Links  []Link `json:"links"`
+	Total  int    `json:"total"`
+	Unread int    `json:"unread"`
 }
 
 // mapRegion is a hand-drawn area on the topic map. The polygon is stored in

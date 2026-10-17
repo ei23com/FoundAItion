@@ -106,7 +106,7 @@
         *, *::before, *::after { box-sizing: border-box; }
 
         html {
-            font-size: 14px;
+            font-size: 15.4px;
             -webkit-text-size-adjust: 100%;
             scrollbar-color: var(--line) var(--bg2);
         }
@@ -115,7 +115,7 @@
             margin: 0;
             min-height: 100vh;
             font-family: var(--mono);
-            font-size: 14px;
+            font-size: 1rem;
             line-height: 1.55;
             color: var(--ink);
             background-color: var(--bg);
@@ -255,6 +255,7 @@
 
         .led i.c-cyan { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
         .led i.c-yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+        .led i.c-magenta { background: var(--magenta); box-shadow: 0 0 6px var(--magenta); }
 
         /* ── Ansichts-Tabs ───────────────────────────────────────── */
         .tabs {
@@ -2165,6 +2166,7 @@
 
     <div class="leds">
         <span class="led" title="Eintr&auml;ge"><i></i><b id="hudLinks">0</b><span data-i18n="hud_links">Links</span></span>
+        <span class="led led-unread" title="Ungelesene Eintr&auml;ge"><i class="c-magenta"></i><b id="hudUnread">0</b><span data-i18n="hud_unread">ungelesen</span></span>
         <span class="led led-cats" title="Kategorien"><i class="c-cyan"></i><b id="hudCats">0</b><span data-i18n="hud_cats">Kat.</span></span>
         <span class="led led-page" title="Seite"><i class="c-yellow"></i><b id="hudPage">1/1</b></span>
     </div>
@@ -2394,6 +2396,7 @@ const translations = {
         tab_map: 'Karte',
         hud_links: 'Links',
         hud_cats: 'Kat.',
+        hud_unread: 'ungelesen',
         mw_window: 'Zeitfenster',
         mw_all: 'Alle',
         mw_days: 'Tage',
@@ -2451,6 +2454,7 @@ const translations = {
         tab_map: 'Map',
         hud_links: 'Links',
         hud_cats: 'Cat.',
+        hud_unread: 'unread',
         mw_window: 'Time window',
         mw_all: 'All',
         mw_days: 'days',
@@ -2604,6 +2608,7 @@ function setLanguage(lang) {
 // ── State ────────────────────────────────────────────────
 let allLinks       = [];
 let allLinksTotal  = 0;
+let allLinksUnread = 0;
 let categories     = [];
 let activeCategory = '';
 let activeIncludeFilter = ''; // 'true' | 'false' | ''
@@ -2665,6 +2670,7 @@ async function load() {
         ]);
         allLinks = (pageData.links || pageData) || [];
         allLinksTotal = pageData.total || 0;
+        if (typeof pageData.unread === 'number') allLinksUnread = pageData.unread;
         categories = cats || [];  // defensive: API könnte null zurückgeben
         catColorMap = {};
         if (Array.isArray(categories)) {
@@ -2735,6 +2741,8 @@ async function showDetail(id) {
                 try {
                     await fetch('/api/links?id=' + id + '&read=true', { method: 'PATCH' });
                     link.read = true;
+                    allLinksUnread = Math.max(0, allLinksUnread - 1);
+                    updateHud();
                     // Auch im Listen-Cache aktualisieren
                     const cached = allLinks.find(l => l.id === id);
                     if (cached) cached.read = true;
@@ -2843,6 +2851,7 @@ function updateHud() {
     };
     const links = Array.isArray(allLinks) ? allLinks : [];
     setText('hudLinks', allLinksTotal || links.length);
+    setText('hudUnread', allLinksUnread);
 
     const cats = new Set();
     links.forEach(l => { if (l && l.category) cats.add(l.category); });
@@ -3988,6 +3997,8 @@ function renderList(links) {
                 el.classList.toggle('read', !wasRead);
                 el.title = wasRead ? __('read_tooltip_off') : __('read_tooltip_on');
                 el.textContent = wasRead ? '⬤' : '◯';
+                allLinksUnread = Math.max(0, allLinksUnread + (wasRead ? 1 : -1));
+                updateHud();
                 const parentItem = el.closest('.link-item');
                 if (parentItem) {
                     const titleLink = parentItem.querySelector('.link-title');
@@ -4188,6 +4199,10 @@ function renderDetail(link) {
         try {
             await fetch('/api/links?id=' + link.id + '&' + field + '=' + newVal, { method: 'PATCH' });
             link[field] = newVal === 'true';
+            if (field === 'read') {
+                allLinksUnread = Math.max(0, allLinksUnread + (newVal === 'true' ? -1 : 1));
+                updateHud();
+            }
             const btn = document.getElementById(btnId);
             if (btn) {
                 btn.textContent = newVal === 'true' ? iconOn : iconOff;
