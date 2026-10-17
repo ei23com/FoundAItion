@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ei23-FoundAItion</title>
+    <title>ei23-FOUND/AI/TION</title>
     <style>
         /* ═══════════════════════════════════════════════════════════════
            FOUNDAITION // 8-BIT KONTROLLPULT
@@ -191,7 +191,6 @@
             font-size: 1.05rem;
             line-height: 1;
             text-shadow: 0 0 8px rgba(61, 255, 122, 0.65);
-            animation: ledblink 3.2s steps(1) infinite;
         }
 
         .brand-name {
@@ -204,7 +203,6 @@
 
         .brand-accent { color: var(--green); }
 
-        .brand-prefix { color: var(--dim); font-weight: 400; }
 
         .brand-sub {
             padding-left: 0.5rem;
@@ -250,20 +248,11 @@
             height: 0.42rem;
             flex: none;
             background: var(--green);
-            box-shadow: 0 0 6px var(--green);
-            animation: ledblink 2.4s steps(1) infinite;
+            box-shadow: 0 0 7px var(--green);
         }
 
         .led i.c-cyan { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
         .led i.c-yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
-
-        .led-clock b { letter-spacing: 0.14em; }
-
-        @keyframes ledblink {
-            0%, 88% { opacity: 1; }
-            92% { opacity: 0.15; }
-            96% { opacity: 1; }
-        }
 
         /* ── Ansichts-Tabs ───────────────────────────────────────── */
         .tabs {
@@ -710,19 +699,20 @@
             height: 1.75rem;
             margin-top: 0.05rem;
             padding: 0;
-            background: var(--bg2);
-            border: 2px solid var(--line);
+            background: rgba(61, 255, 122, 0.1);
+            border: 2px solid rgba(61, 255, 122, 0.55);
             border-radius: 0;
             box-shadow: 2px 2px 0 #000;
-            color: var(--dim2);
+            color: var(--green);
             font: inherit;
             font-size: 0.7rem;
             line-height: 1;
             cursor: pointer;
         }
 
-        .link-read-btn:hover { border-color: var(--green); color: var(--green); }
-        .link-read-btn.read { border-color: var(--green); color: var(--green); background: rgba(61, 255, 122, 0.08); }
+        .link-read-btn:hover { border-color: var(--cyan); background: rgba(56, 214, 255, 0.12); color: var(--cyan); }
+        .link-read-btn.read { border-color: var(--line2); background: var(--bg2); color: var(--dim2); }
+        .link-read-btn.read:hover { border-color: var(--line3); color: var(--dim); }
 
         .link-thumb {
             flex: none;
@@ -861,6 +851,17 @@
 
         .detail-topbar .spacer { flex: 1 1 auto; }
 
+        .detail-pager {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.6rem 0.75rem;
+            background: var(--panel2);
+            border-top: 3px solid var(--line);
+        }
+
+        .detail-pager .spacer { flex: 1 1 auto; }
+
         .detail-back {
             appearance: none;
             display: inline-flex;
@@ -880,7 +881,8 @@
             white-space: nowrap;
         }
 
-        .detail-back:hover { border-color: var(--cyan); color: var(--cyan); }
+        .detail-back:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+        .detail-back:disabled { cursor: default; border-color: var(--line2); }
         .detail-back:active { transform: translate(3px, 3px); box-shadow: none; }
         .detail-back svg { flex: none; }
 
@@ -963,6 +965,12 @@
         }
 
         .detail-actions .spacer { flex: 1 1 auto; }
+
+        .read-toggle.is-unread {
+            border-color: rgba(61, 255, 122, 0.55);
+            background: rgba(61, 255, 122, 0.1);
+            color: var(--green);
+        }
 
         .btn-action {
             appearance: none;
@@ -2149,7 +2157,7 @@
 
     <div class="brand">
         <span class="brand-mark">&#9646;</span>
-        <span class="brand-name"><span class="brand-prefix">ei23-</span>FOUND<span class="brand-accent">/</span>AI<span class="brand-accent">/</span>ION</span>
+        <span class="brand-name">ei23-FOUND<span class="brand-accent">/</span>AI<span class="brand-accent">/</span>ION</span>
         <span class="brand-sub">INDEX // v2</span>
     </div>
 
@@ -2157,7 +2165,6 @@
         <span class="led" title="Eintr&auml;ge"><i></i><b id="hudLinks">0</b><span data-i18n="hud_links">Links</span></span>
         <span class="led led-cats" title="Kategorien"><i class="c-cyan"></i><b id="hudCats">0</b><span data-i18n="hud_cats">Kat.</span></span>
         <span class="led led-page" title="Seite"><i class="c-yellow"></i><b id="hudPage">1/1</b></span>
-        <span class="led led-clock" title="Uhrzeit"><b id="hudClock">--:--</b><span data-i18n="hud_time">Zeit</span></span>
     </div>
 </div>
 
@@ -2297,6 +2304,8 @@ const translations = {
         add_cancel:   'Abbrechen',
         add_insert:   'Einf\u00fcgen',
         detail_back:  'Zur\u00fcck zur \u00dcbersicht',
+        detail_prev:  'Vorheriger',
+        detail_next:  'N\u00e4chster',
         detail_copy_url: 'URL kopieren',
         detail_copy_summary: 'Zusammenfassung kopieren',
         detail_copy_content: 'Originaltext kopieren',
@@ -2383,7 +2392,6 @@ const translations = {
         tab_map: 'Karte',
         hud_links: 'Links',
         hud_cats: 'Kat.',
-        hud_time: 'Zeit',
         mw_window: 'Zeitfenster',
         mw_all: 'Alle',
         mw_days: 'Tage',
@@ -2441,7 +2449,6 @@ const translations = {
         tab_map: 'Map',
         hud_links: 'Links',
         hud_cats: 'Cat.',
-        hud_time: 'Time',
         mw_window: 'Time window',
         mw_all: 'All',
         mw_days: 'days',
@@ -2487,6 +2494,8 @@ const translations = {
         add_cancel:   'Cancel',
         add_insert:   'Insert',
         detail_back:  'Back to list',
+        detail_prev:  'Previous',
+        detail_next:  'Next',
         detail_copy_url: 'Copy URL',
         detail_copy_summary: 'Copy summary',
         detail_copy_content: 'Copy original text',
@@ -2839,17 +2848,6 @@ function updateHud() {
 
     const total = Math.max(1, Math.ceil((allLinksTotal || 0) / pageSize));
     setText('hudPage', currentPage + '/' + total);
-}
-
-function startHudClock() {
-    const el = document.getElementById('hudClock');
-    if (!el) return;
-    const tick = () => {
-        const d = new Date();
-        el.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-    };
-    tick();
-    setInterval(tick, 15000);
 }
 
 function renderMapShell() {
@@ -4045,8 +4043,8 @@ function renderDetail(link) {
                 ${__('detail_back')}
             </button>
             <span class="spacer"></span>
-            <button class="detail-back" id="prevLinkBtn" title="Vorheriger">‹</button>
-            <button class="detail-back" id="nextLinkBtn" title="Nächster">›</button>
+            <button class="detail-back" id="prevLinkBtn" title="${__('detail_prev')}">‹</button>
+            <button class="detail-back" id="nextLinkBtn" title="${__('detail_next')}">›</button>
         </div>
 
         <article class="detail-card">
@@ -4066,7 +4064,7 @@ function renderDetail(link) {
 
             <div class="detail-actions">
                 <!-- Status toggle icons (dezent) -->
-                <button class="btn-icon" id="detailToggleRead" title="${(link.read === true) ? __('read_tooltip_on') : __('read_tooltip_off')}">${(link.read === true) ? '◯' : '⬤'}</button>
+                <button class="btn-icon read-toggle${link.read === true ? '' : ' is-unread'}" id="detailToggleRead" title="${(link.read === true) ? __('read_tooltip_on') : __('read_tooltip_off')}">${(link.read === true) ? '◯' : '⬤'}</button>
                 <button class="btn-icon" id="detailToggleMarked" title="${(link.marked === true) ? __('marked_tooltip_on') : __('marked_tooltip_off')}">${(link.marked === true) ? '★' : '☆'}</button>
                 <button class="btn-icon" id="detailToggleIncluded" title="${(link.included === true) ? __('included_tooltip_on') : __('included_tooltip_off')}">${(link.included === true) ? '▲' : '△'}</button>
                 <span class="spacer"></span>
@@ -4118,6 +4116,13 @@ function renderDetail(link) {
                 <div id="tabContent" class="markdown-body content-raw" style="display:none;">${esc(link.content || '')}</div>
                 ${!hasContent ? '<div class="dim-italic detail-no-content">' + __('detail_no_content') + '</div>' : ''}
             </div>
+
+            ${allLinks.length > 1 ? `
+            <div class="detail-pager">
+                <button class="detail-back" id="prevLinkBtn2" title="${__('detail_prev')}">‹ ${__('detail_prev')}</button>
+                <span class="spacer"></span>
+                <button class="detail-back" id="nextLinkBtn2" title="${__('detail_next')}">${__('detail_next')} ›</button>
+            </div>` : ''}
         </article>
     `;
 
@@ -4140,16 +4145,19 @@ function renderDetail(link) {
         const target = allLinks[linkIdx + dir];
         if (target) location.hash = '#link/' + target.id;
     }
-    const prevBtn = document.getElementById('prevLinkBtn');
-    const nextBtn = document.getElementById('nextLinkBtn');
-    if (prevBtn) {
-        prevBtn.style.opacity = (linkIdx > 0 && allLinks[linkIdx - 1]) ? '1' : '0.2';
-        prevBtn.addEventListener('click', () => navigateLink(-1));
-    }
-    if (nextBtn) {
-        nextBtn.style.opacity = (linkIdx >= 0 && linkIdx < allLinks.length - 1 && allLinks[linkIdx + 1]) ? '1' : '0.2';
-        nextBtn.addEventListener('click', () => navigateLink(1));
-    }
+    const hasPrev = linkIdx > 0 && !!allLinks[linkIdx - 1];
+    const hasNext = linkIdx >= 0 && linkIdx < allLinks.length - 1 && !!allLinks[linkIdx + 1];
+    [
+        [document.getElementById('prevLinkBtn'), hasPrev, -1],
+        [document.getElementById('prevLinkBtn2'), hasPrev, -1],
+        [document.getElementById('nextLinkBtn'), hasNext, 1],
+        [document.getElementById('nextLinkBtn2'), hasNext, 1],
+    ].forEach(([btn, atEdge, dir]) => {
+        if (!btn) return;
+        btn.disabled = atEdge;
+        btn.style.opacity = atEdge ? '0.2' : '1';
+        btn.addEventListener('click', () => navigateLink(dir));
+    });
 
     document.getElementById('btnCopyUrl').addEventListener('click', () => {
         copyToClipboard(link.url);
@@ -4188,8 +4196,10 @@ function renderDetail(link) {
         }
     }
 
-    document.getElementById('detailToggleRead')?.addEventListener('click', () => {
-        toggleDetailField('read', !link.read ? 'true' : 'false', 'detailToggleRead', '◯', '⬤', 'read_tooltip_on', 'read_tooltip_off');
+    document.getElementById('detailToggleRead')?.addEventListener('click', (e) => {
+        const willBeRead = !link.read;
+        toggleDetailField('read', willBeRead ? 'true' : 'false', 'detailToggleRead', '◯', '⬤', 'read_tooltip_on', 'read_tooltip_off');
+        e.currentTarget.classList.toggle('is-unread', !willBeRead);
     });
     document.getElementById('detailToggleMarked')?.addEventListener('click', () => {
         toggleDetailField('marked', !link.marked ? 'true' : 'false', 'detailToggleMarked', '★', '☆', 'marked_tooltip_on', 'marked_tooltip_off');
@@ -5315,7 +5325,6 @@ document.getElementById('themeToggle')?.addEventListener('click', () => {
     if (searchClearBtn) {
         searchClearBtn.classList.toggle('visible', searchInput.value.trim().length > 0);
     }
-    startHudClock();
     load();
     checkRoute();
 })();
