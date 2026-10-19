@@ -69,8 +69,6 @@
             --scrollbar: var(--line);
             --scrollbar-hover: var(--line3);
             --transition: none;
-            --scanline: rgba(0, 0, 0, 0.30);
-            --scanline-opacity: 0.45;
         }
 
         /* Hell: Papier-Terminal – gleiche Kanten, invertierte Flächen */
@@ -98,8 +96,6 @@
             --primary-subtle: rgba(10, 106, 138, 0.12);
             --shadow: 4px 4px 0 #16181d;
             --shadow-sm: 3px 3px 0 #16181d;
-            --scanline: rgba(0, 0, 0, 0.10);
-            --scanline-opacity: 0.35;
         }
 
         /* ── Grundraster ─────────────────────────────────────────── */
@@ -125,21 +121,6 @@
             background-size: 32px 32px, 32px 32px;
             background-attachment: fixed;
             padding-bottom: 2.5rem;
-        }
-
-        /* Scanlines über allem (maus-transparent) */
-        body::after {
-            content: "";
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            pointer-events: none;
-            background: repeating-linear-gradient(
-                to bottom,
-                var(--scanline) 0 1px,
-                transparent 1px 3px
-            );
-            opacity: var(--scanline-opacity);
         }
 
         ::selection { background: var(--green); color: #04120a; }
@@ -2127,7 +2108,6 @@
             .detail-title { font-size: 0.98rem; }
             .detail-actions .btn-action { flex: 1 1 auto; justify-content: center; }
             .config-modal, .readme-modal, .link-modal { max-height: 94vh; }
-            body::after { opacity: 0.3; }
         }
 
         @media (prefers-reduced-motion: reduce) {
