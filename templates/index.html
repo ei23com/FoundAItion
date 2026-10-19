@@ -979,9 +979,6 @@
         .btn-action:active { transform: translate(3px, 3px); box-shadow: none; }
         .btn-action:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
-        .btn-action.green { border-color: var(--green); color: var(--green); }
-        .btn-action.green:hover { background: rgba(61, 255, 122, 0.12); border-color: var(--green); color: var(--green); }
-
         .btn-action.danger { border-color: var(--red); color: var(--red); }
         .btn-action.danger:hover { background: var(--red); border-color: var(--red); color: #140303; }
 
@@ -4055,7 +4052,7 @@ function renderDetail(link) {
                 <button class="btn-icon" id="detailToggleIncluded" title="${(link.included === true) ? __('included_tooltip_on') : __('included_tooltip_off')}">${(link.included === true) ? '▲' : '△'}</button>
                 <span class="spacer"></span>
                 <!-- Action buttons -->
-                <button class="btn-action green" id="btnCopyUrl">
+                <button class="btn-action" id="btnCopyUrl">
                     📋 ${__('detail_copy_url')}
                 </button>
                 <button class="btn-action" id="btnCopyMd">
