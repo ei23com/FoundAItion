@@ -2638,8 +2638,9 @@ async function load() {
             api(url),
             api('/api/categories')
         ]);
-        allLinks = (pageData.links || pageData) || [];
-        allLinksTotal = pageData.total || 0;
+        const rawLinks = Array.isArray(pageData) ? pageData : pageData.links;
+        allLinks = Array.isArray(rawLinks) ? rawLinks : [];
+        allLinksTotal = typeof pageData.total === 'number' ? pageData.total : allLinks.length;
         if (typeof pageData.unread === 'number') allLinksUnread = pageData.unread;
         categories = cats || [];  // defensive: API könnte null zurückgeben
         catColorMap = {};
@@ -3821,6 +3822,7 @@ function getPageNumbers(current, total) {
 
 // ── Render: List ──────────────────────────────────────────
 function renderList(links) {
+    if (!Array.isArray(links)) links = [];
     const totalPages = Math.max(1, Math.ceil(allLinksTotal / pageSize));
     if (currentPage > totalPages) currentPage = totalPages;
 

@@ -264,6 +264,12 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 		links = append(links, *l)
 	}
 
+	// Leere Ergebnisliste als [] (nicht null) ausliefern – Clients sollen
+	// direkt ueber die Laenge iterieren koennen.
+	if links == nil {
+		links = []Link{}
+	}
+
 	// Content only im JSON mitsenden wenn explizit angefordert
 	if !wantContent {
 		for i := range links {
