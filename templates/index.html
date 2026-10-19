@@ -979,14 +979,8 @@
         .btn-action:active { transform: translate(3px, 3px); box-shadow: none; }
         .btn-action:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
-        .btn-action.primary {
-            background: var(--green);
-            border-color: var(--green);
-            color: #04120a;
-            font-weight: 700;
-        }
-
-        .btn-action.primary:hover { background: #7bffab; border-color: #7bffab; color: #04120a; }
+        .btn-action.green { border-color: var(--green); color: var(--green); }
+        .btn-action.green:hover { background: rgba(61, 255, 122, 0.12); border-color: var(--green); color: var(--green); }
 
         .btn-action.danger { border-color: var(--red); color: var(--red); }
         .btn-action.danger:hover { background: var(--red); border-color: var(--red); color: #140303; }
@@ -1103,21 +1097,20 @@
         .btn-save-edit {
             appearance: none;
             margin-top: 0.6rem;
-            padding: 0.4rem 0.75rem;
-            background: var(--green);
+            padding: 0.38rem 0.65rem;
+            background: var(--panel2);
             border: 2px solid var(--green);
             border-radius: 0;
             box-shadow: 3px 3px 0 #000;
-            color: #04120a;
+            color: var(--green);
             font: inherit;
-            font-size: 0.7rem;
-            font-weight: 700;
-            letter-spacing: 0.12em;
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
             cursor: pointer;
         }
 
-        .btn-save-edit:hover { background: #7bffab; border-color: #7bffab; }
+        .btn-save-edit:hover { background: rgba(61, 255, 122, 0.12); border-color: var(--green); color: var(--green); }
         .btn-save-edit:active { transform: translate(3px, 3px); box-shadow: none; }
 
         .edit-divider { border-top: 2px dashed var(--line2); margin: 0.8rem 0 0.5rem; }
@@ -4062,7 +4055,7 @@ function renderDetail(link) {
                 <button class="btn-icon" id="detailToggleIncluded" title="${(link.included === true) ? __('included_tooltip_on') : __('included_tooltip_off')}">${(link.included === true) ? '▲' : '△'}</button>
                 <span class="spacer"></span>
                 <!-- Action buttons -->
-                <button class="btn-action primary" id="btnCopyUrl">
+                <button class="btn-action green" id="btnCopyUrl">
                     📋 ${__('detail_copy_url')}
                 </button>
                 <button class="btn-action" id="btnCopyMd">
