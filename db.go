@@ -80,6 +80,54 @@ func ensureTableExists(db *sql.DB, tblName string) error {
 	return nil
 }
 
+// ─── Schema Migration: List indexes ──────────────────────────────────────────
+
+// listIndexes keep the list/feed endpoints from doing full table scans. The
+// links table is ~250 MB because every row carries the scraped text (avg 35 kB,
+// up to 1.2 MB), so an unindexed COUNT(*) or GROUP BY reads the whole file –
+// that is what makes the first list request after a start drag.
+//
+// The read index is an expression index: the queries use IFNULL("read", 0) so
+// that legacy NULL rows count as unread, and SQLite can only use an index when
+// the expression matches exactly.
+var listIndexes = []struct {
+	name string
+	tmpl string // %s = table name
+}{
+	{"idx_links_category", `CREATE INDEX IF NOT EXISTS idx_links_category ON %s ("category")`},
+	{"idx_links_read", `CREATE INDEX IF NOT EXISTS idx_links_read ON %s (IFNULL("read", 0), "id")`},
+	{"idx_links_timestamp", `CREATE INDEX IF NOT EXISTS idx_links_timestamp ON %s ("timestamp")`},
+	{"idx_links_vec_model", `CREATE INDEX IF NOT EXISTS idx_links_vec_model ON %s ("vec_model")`},
+}
+
+// ensureListIndexes creates the list-endpoint indexes. Idempotent; ANALYZE is
+// run only when something was actually created, so a normal start pays nothing.
+func ensureListIndexes(db *sql.DB, tblName string) error {
+	countSQL := `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_links%'`
+	var before int
+	if err := db.QueryRow(countSQL).Scan(&before); err != nil {
+		return fmt.Errorf("count indexes: %w", err)
+	}
+
+	for _, idx := range listIndexes {
+		if _, err := db.Exec(fmt.Sprintf(idx.tmpl, tblName)); err != nil {
+			return fmt.Errorf("create index %s: %w", idx.name, err)
+		}
+	}
+
+	var after int
+	if err := db.QueryRow(countSQL).Scan(&after); err != nil {
+		return fmt.Errorf("count indexes: %w", err)
+	}
+	if after > before {
+		if _, err := db.Exec(`ANALYZE`); err != nil {
+			log.Printf("WARN: ANALYZE after index creation failed: %v", err)
+		}
+		log.Printf("[migration] created %d list indexes (total %d)", after-before, after)
+	}
+	return nil
+}
+
 // ─── Schema Migration: Vectormap ─────────────────────────────────────────────
 
 // vectorColumns lists the columns added by the vectormap feature.

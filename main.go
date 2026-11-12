@@ -71,6 +71,12 @@ func main() {
 		log.Fatalf("Vectormap regions migration failed: %v", err)
 	}
 
+	// Indexes for the list/feed queries (idempotent; ANALYZE only runs when the
+	// indexes are created for the first time).
+	if err := ensureListIndexes(db, TableName); err != nil {
+		log.Printf("WARN: list index migration failed: %v", err)
+	}
+
 	// Startup diagnostics
 	logStartupDiagnostics(cfg)
 

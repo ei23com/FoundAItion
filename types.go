@@ -165,6 +165,82 @@ type mapRegion struct {
 
 // ─── Helper: scan a single row into a Link pointer ───────────────────────────
 
+// listColumns is the SELECT list for the paginated list endpoints. Position 6
+// is the content payload: the real column only when the caller asked for it,
+// otherwise NULL, so SQLite never touches the overflow pages holding the
+// scraped text (avg 35 kB, up to 1.2 MB per row). The last column carries
+// length("content"), which SQLite answers from the row header alone – the UI
+// badge "N Chars · ~M Tokens" keeps working without shipping the text.
+//
+// The column count is identical in both shapes, so scanLinkList handles either.
+func listColumns(wantContent bool) string {
+	content := `CAST(NULL AS TEXT)`
+	if wantContent {
+		content = `"content"`
+	}
+	return fmt.Sprintf(`"id", "timestamp", "url", "title", "summary", %s, `+
+		`"category", "note", "included", "marked", "read", COALESCE(length("content"), 0)`, content)
+}
+
+// scanLinkList reads one row produced by listColumns. ContentLen comes straight
+// from SQL, so it stays correct even when the text itself was not fetched.
+func scanLinkList(rows interface {
+	Next() bool
+	Scan(args ...interface{}) error
+}) (*Link, error) {
+	var l Link
+	var cat sql.NullString
+	var note sql.NullString
+	var summary sql.NullString
+	var content sql.NullString
+	var contentLen sql.NullInt64
+	var ts dbTime
+
+	var inc NullBool
+	var markedVal NullBool
+	var readVal NullBool
+
+	if err := rows.Scan(&l.ID, &ts, &l.URL, &l.Title, &summary, &content, &cat, &note,
+		&inc, &markedVal, &readVal, &contentLen); err != nil {
+		return nil, err
+	}
+
+	l.Content = content.String
+	l.ContentLen = int(contentLen.Int64)
+
+	l.Timestamp = ts.Format(time.RFC3339)
+	if summary.Valid {
+		l.Summary = summary.String
+	}
+	if cat.Valid {
+		l.Category = cat.String
+	}
+	if note.Valid {
+		l.Note = note.String
+	}
+	if inc.Valid && inc.Bool > 0 {
+		v := true
+		l.Included = &v
+	} else {
+		v := false
+		l.Included = &v
+	}
+	if markedVal.Valid && markedVal.Bool > 0 {
+		l.Marked = true
+	}
+	if readVal.Valid && readVal.Bool > 0 {
+		l.Read = true
+	}
+
+	var buf strings.Builder
+	if l.Summary != "" {
+		_ = mdRenderer.Convert([]byte(l.Summary), &buf)
+		l.SummaryHTML = buf.String()
+	}
+
+	return &l, nil
+}
+
 // scanLink reads one row from a DB rows iterator and returns a Link pointer.
 // Used by getLinks, processEntries, and similar functions.
 func scanLink(rows interface {

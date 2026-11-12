@@ -124,6 +124,18 @@ func (a *App) handleAPI(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// dayAfter returns the next calendar day of a "YYYY-MM-DD" value. It lets a
+// "bis"-filter stay a bare column comparison ("timestamp" < nextDay) instead of
+// wrapping the column in substr(). ok is false for anything that is not a plain
+// date, in which case the caller falls back to the old substr() comparison.
+func dayAfter(date string) (next string, ok bool) {
+	d, err := time.Parse("2006-01-02", strings.TrimSpace(date))
+	if err != nil {
+		return "", false
+	}
+	return d.AddDate(0, 0, 1).Format("2006-01-02"), true
+}
+
 // ─── List Links – GET /api/links ─────────────────────────────────────────────
 
 func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +199,7 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 	if readFilter == "true" {
 		whereClauses = append(whereClauses, `"read" = 1`)
 	} else if readFilter == "false" {
-		whereClauses = append(whereClauses, `("read" = 0 OR "read" IS NULL)`)
+		whereClauses = append(whereClauses, `IFNULL("read", 0) = 0`)
 	}
 	if urlLike != "" {
 		pattern := "%" + urlLike + "%"
@@ -207,13 +219,20 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 		args = append(args, pattern)
 	}
 	if dateFrom := r.URL.Query().Get("date_from"); dateFrom != "" {
-		// Timestamps sind "YYYY-MM-DD HH:MM:SS" → Datumspräfixvergleich genügt.
-		whereClauses = append(whereClauses, `substr("timestamp",1,10) >= ?`)
+		// Timestamps sind "YYYY-MM-DD HH:MM:SS" → ein nackter Textvergleich auf
+		// den Datumspräfix kann den Index idx_links_timestamp nutzen; substr()
+		// um die Spalte herum hätte jeden Index wirkungslos gemacht.
+		whereClauses = append(whereClauses, `"timestamp" >= ?`)
 		args = append(args, dateFrom)
 	}
 	if dateTo := r.URL.Query().Get("date_to"); dateTo != "" {
-		whereClauses = append(whereClauses, `substr("timestamp",1,10) <= ?`)
-		args = append(args, dateTo)
+		if next, ok := dayAfter(dateTo); ok {
+			whereClauses = append(whereClauses, `"timestamp" < ?`)
+			args = append(args, next)
+		} else {
+			whereClauses = append(whereClauses, `substr("timestamp",1,10) <= ?`)
+			args = append(args, dateTo)
+		}
 	}
 
 	whereSQL := ""
@@ -232,16 +251,19 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 
 	// Ungelesene gesamt – unabhaengig von den aktiven Filtern (HUD-Anzeige).
 	var unread int
-	unreadSQL := fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE "read" = 0 OR "read" IS NULL`, TableName)
+	unreadSQL := fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE IFNULL("read", 0) = 0`, TableName)
 	if err := a.db.QueryRowContext(r.Context(), unreadSQL).Scan(&unread); err != nil {
 		log.Printf("WARN: unread count query failed: %v", err)
 	}
 
 	// Fetch data
-	dataSQL := fmt.Sprintf(`SELECT "id", "timestamp", "url", "title", "summary", "content", "category", "note", "included", "marked", "read"
+	// content wird nur projiziert, wenn es bestellt wurde: der Text liegt in
+	// Overflow-Seiten (Ø 35 kB, bis 1,2 MB pro Zeile) und sonst unnötig von der
+	// Platte geholt wird. Die Länge liefert length("content") aus dem Zeilenkopf.
+	dataSQL := fmt.Sprintf(`SELECT %s
 	FROM %s%s
 	ORDER BY "id" DESC
-	LIMIT ? OFFSET ?`, TableName, whereSQL)
+	LIMIT ? OFFSET ?`, listColumns(wantContent), TableName, whereSQL)
 	dataArgs := append(append([]any{}, args...), pageSizeDB, offset)
 
 	rows, err := a.db.QueryContext(r.Context(), dataSQL, dataArgs...)
@@ -254,12 +276,11 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 
 	var links []Link
 	for rows.Next() {
-		l, err := scanLink(rows)
+		l, err := scanLinkList(rows)
 		if err != nil {
 			log.Printf("WARN: scan error: %v", err)
 			continue
 		}
-		l.ContentLen = len(l.Content)
 		l.ContentLimit = int(float64(a.cfg.SummaryMaxTokens) * 3.5)
 		links = append(links, *l)
 	}
@@ -268,13 +289,6 @@ func (a *App) getLinks(w http.ResponseWriter, r *http.Request) {
 	// direkt ueber die Laenge iterieren koennen.
 	if links == nil {
 		links = []Link{}
-	}
-
-	// Content only im JSON mitsenden wenn explizit angefordert
-	if !wantContent {
-		for i := range links {
-			links[i].Content = ""
-		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1608,7 +1622,7 @@ func (a *App) handleRSS(w http.ResponseWriter, r *http.Request) {
 	if readFilter == "true" {
 		whereClauses = append(whereClauses, `"read" = 1`)
 	} else if readFilter == "false" {
-		whereClauses = append(whereClauses, `("read" = 0 OR "read" IS NULL)`)
+		whereClauses = append(whereClauses, `IFNULL("read", 0) = 0`)
 	}
 	if q != "" {
 		pattern := "%" + q + "%"
